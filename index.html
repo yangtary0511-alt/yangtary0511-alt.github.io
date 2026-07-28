@@ -206,12 +206,12 @@ async function fetchWithTimeout(url,options={}){
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),SYNC_TIMEOUT_MS);
  try{return await fetch(url,{...options,signal:controller.signal})}finally{clearTimeout(timer)}
 }
-async function pushCloud(code,current){const res=await fetchWithTimeout(SYNC_ENDPOINT,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,state:current})});if(!res.ok)throw new Error('save_failed');return res.json()}
+async function pushCloud(code,current){const res=await fetchWithTimeout(SYNC_ENDPOINT,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,namespace:'toeic',state:current})});if(!res.ok)throw new Error('save_failed');return res.json()}
 async function cloudSync({quiet=false,createIfMissing=false,codeOverride=''}={}){
  const code=normalizeSyncCode(codeOverride||getSyncCode());if(!isValidSyncCode(code)){if(!quiet)setSyncStatus('4~64자의 동기화 코드를 입력하세요.','warn');return false}if(syncInFlight)return false;if(!navigator.onLine){setSyncStatus('오프라인 · 인터넷 연결 후 자동 동기화','warn');return false}
  syncInFlight=true;setSyncStatus('클라우드와 동기화 중…');
  try{
-  const res=await fetchWithTimeout(`${SYNC_ENDPOINT}?code=${encodeURIComponent(code)}`,{cache:'no-store'});let cloud=null;
+  const res=await fetchWithTimeout(`${SYNC_ENDPOINT}?code=${encodeURIComponent(code)}&namespace=toeic`,{cache:'no-store'});let cloud=null;
   if(res.status===404){if(!createIfMissing){setSyncStatus('해당 동기화 코드를 찾지 못했습니다.','warn');return false}await pushCloud(code,state)}
   else if(!res.ok)throw new Error('load_failed');
   else{const data=await res.json();cloud=data.state}
@@ -338,8 +338,9 @@ function showLearningRecords(){
 document.getElementById('hubCodeInput').addEventListener('input',e=>{e.target.value=formatSyncCode(normalizeSyncCode(e.target.value));setHubStatus('')});
 document.getElementById('hubCodeInput').addEventListener('keydown',e=>{if(e.key==='Enter')enterLearningHub()});
 document.getElementById('openToeicCard').onclick=openToeicApp;
-document.getElementById('openElectricianCard').onclick=()=>window.location.assign(ELECTRICIAN_APP_URL);
-document.getElementById('openSentenceForestCard').onclick=()=>window.location.assign(SENTENCE_FOREST_URL);
+function openSyncedApp(url){const code=getSyncCode();window.location.assign(code?`${url}#sync=${encodeURIComponent(code)}`:url)}
+document.getElementById('openElectricianCard').onclick=()=>openSyncedApp(ELECTRICIAN_APP_URL);
+document.getElementById('openSentenceForestCard').onclick=()=>openSyncedApp(SENTENCE_FOREST_URL);
 document.querySelectorAll('[data-placeholder-title]').forEach(el=>el.onclick=()=>showPlaceholder(el.dataset.placeholderTitle,el.dataset.placeholderIcon));
 document.getElementById('placeholderBackBtn').onclick=showHub;document.getElementById('placeholderHomeBtn').onclick=showHub;
 document.getElementById('hubReturnBtn').onclick=showHub;document.getElementById('recordsBtn').onclick=showLearningRecords;
