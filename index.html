@@ -69,6 +69,9 @@
 .login-mark img{display:block;width:100%;height:100%;object-fit:cover}
 @media(max-width:860px){.subject-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.portal-screen{padding:15px}.portal-top{align-items:center;margin-bottom:20px}.portal-brand h1{font-size:24px}.portal-logo{width:46px;height:46px}.hub-account{padding:8px 10px}.subject-grid{gap:12px}.subject-card{min-height:218px;padding:15px 11px;border-radius:23px}.subject-card .subject-icon{width:74px;height:74px;border-radius:21px;margin:7px 0 13px}.subject-card .subject-icon svg{width:43px;height:43px}.subject-card h3{font-size:18px}.subject-card .subject-foot{font-size:10.5px}.subject-card .subject-foot span:last-child{margin-top:8px}.install-btn{display:none}}
+.portal-btn.install{background:#172033;color:#fff}
+.login-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.login-actions .portal-btn{margin-top:10px}
 .external-app-screen{position:fixed;inset:0;z-index:200;background:#f4f6f9;padding:0}
 .external-app-frame{display:block;width:100%;height:100%;border:0;background:#fff}
 .external-app-loading{position:absolute;inset:0;z-index:205;display:grid;place-items:center;background:#f4f6f9;color:#334155;font:800 15px/1.4 Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
@@ -86,9 +89,12 @@
       <p>동기화 코드 하나로 모든 과목의 학습 기록을 이어갑니다.</p>
       <div class="login-label">학습 동기화 코드</div>
       <input class="portal-input" id="hubCodeInput" maxlength="64" placeholder="동기화 코드 (4~64자)" autocomplete="off" spellcheck="false" />
-      <button class="portal-btn primary" id="hubLoginBtn" type="button" onclick="enterLearningHub()">학습 앱 열기</button>
+      <button class="portal-btn primary" id="hubLoginBtn" type="button" onclick="enterLearningHub()">기존 아이디로 시작</button>
+      <div class="login-actions">
+        <button class="portal-btn secondary" id="newAccountBtn" type="button">새 아이디 만들기</button>
+        <button class="portal-btn install" id="loginInstallBtn" type="button">앱 다운로드</button>
+      </div>
       <div class="login-status" id="hubLoginStatus"></div>
-      <div class="login-note">처음 사용하는 기기에서는 기존 코드를 입력하세요. 같은 코드를 사용하면 TOEIC 진행 기록과 풀던 회차를 클라우드에서 불러옵니다.</div>
     </div>
   </div>
 </section>
@@ -229,6 +235,7 @@ function formatSyncCode(v=''){const c=normalizeSyncCode(v);return c.match(/.{1,5
 function isValidSyncCode(v=''){const length=normalizeSyncCode(v).length;return length>=MIN_SYNC_CODE_LENGTH&&length<=MAX_SYNC_CODE_LENGTH}
 function getSyncCode(){return normalizeSyncCode(safeStorage.getItem(HUB_SYNC_CODE_KEY)||safeStorage.getItem(SYNC_CODE_KEY)||'')}
 function saveSyncCode(code){const c=normalizeSyncCode(code);safeStorage.setItem(HUB_SYNC_CODE_KEY,c);safeStorage.setItem(SYNC_CODE_KEY,c);return c}
+function clearSyncCode(){safeStorage.removeItem(HUB_SYNC_CODE_KEY);safeStorage.removeItem(SYNC_CODE_KEY)}
 function generateSyncCode(){const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',bytes=new Uint8Array(20);crypto.getRandomValues(bytes);return [...bytes].map(b=>chars[b%chars.length]).join('')}
 function historyKey(h){return h.eventId||JSON.stringify([h.at,h.round,h.ids,h.wrong])}
 function mergeStates(a,b){
@@ -348,21 +355,29 @@ function showPlaceholder(title,icon){
 async function enterLearningHub(){
  const input=document.getElementById('hubCodeInput');const code=normalizeSyncCode(input.value);
  if(!isValidSyncCode(code)){setHubStatus('4~64자의 동기화 코드를 입력하세요.','warn');return}
- const btn=document.getElementById('hubLoginBtn');btn.disabled=true;setHubStatus('학습 메뉴를 여는 중…');
- saveSyncCode(code);
- // 메뉴는 즉시 연다. 클라우드 동기화는 뒤에서 진행해 네트워크 지연 때문에 입구가 막히지 않게 한다.
- showHub();
- const slowNotice=setTimeout(()=>setSyncStatus('연결이 느립니다 · 메뉴는 로컬 모드로 사용할 수 있습니다.','warn'),3000);
+ const btn=document.getElementById('hubLoginBtn'),previousCode=getSyncCode(),previousState=state,previousSession=session;
+ btn.disabled=true;setHubStatus('클라우드 기록을 불러오는 중…');
+ if(previousCode!==code){state=normalizeState(defaultState());session=null;localWrite()}
  try{
   const ok=await cloudSync({codeOverride:code,createIfMissing:false,quiet:true});
-  if(ok){refreshHubSummary();toast('클라우드 기록을 불러왔습니다.');}
-  else if(!navigator.onLine){toast('오프라인 기록으로 시작했습니다.');}
-  else{toast('메뉴는 열렸지만 동기화에 실패했습니다. 잠시 뒤 다시 시도합니다.');setTimeout(()=>cloudSync({codeOverride:code,createIfMissing:false,quiet:true}),1500);}
- }catch(e){toast('메뉴는 열렸습니다. 동기화는 자동으로 다시 시도합니다.');}
- finally{clearTimeout(slowNotice);btn.disabled=false}
+  if(ok){input.value='';showHub();refreshHubSummary();toast('클라우드 기록을 불러왔습니다.');}
+  else{state=previousState;session=previousSession;localWrite();if(previousCode)saveSyncCode(previousCode);else clearSyncCode();setHubStatus('아이디를 확인해 주세요.','warn')}
+ }catch(e){state=previousState;session=previousSession;localWrite();if(previousCode)saveSyncCode(previousCode);else clearSyncCode();setHubStatus('연결하지 못했습니다. 다시 시도해 주세요.','warn')}
+ finally{btn.disabled=false}
+}
+async function startNewCloudAccount(){
+ const btn=document.getElementById('newAccountBtn'),code=generateSyncCode();
+ btn.disabled=true;setHubStatus('새 아이디를 만드는 중…');
+ state=normalizeState(defaultState());session=null;saveSyncCode(code);localWrite();
+ const ok=await cloudSync({codeOverride:code,createIfMissing:true,quiet:true});
+ if(ok){
+  document.getElementById('hubCodeInput').value='';showHub();refreshHubSummary();
+  try{await navigator.clipboard.writeText(formatSyncCode(code));toast('새 아이디를 만들고 복사했습니다.')}catch{toast('새 아이디를 만들었습니다.')}
+ }else setHubStatus('새 아이디를 만들지 못했습니다. 다시 시도해 주세요.','warn');
+ btn.disabled=false;
 }
 function initLearningHub(){
- const code=getSyncCode(),input=document.getElementById('hubCodeInput');if(code){input.value=formatSyncCode(code);document.getElementById('hubLoginBtn').textContent='저장된 코드로 시작'}
+ const input=document.getElementById('hubCodeInput');input.value='';document.getElementById('hubLoginBtn').textContent='기존 아이디로 시작';
  document.getElementById('loginScreen').classList.remove('hidden');document.getElementById('hubScreen').classList.add('hidden');document.getElementById('placeholderScreen').classList.add('hidden');document.getElementById('toeicAppShell').classList.add('hidden');
 }
 function getWrongFrequency(){
@@ -382,6 +397,7 @@ function showLearningRecords(){
 
 document.getElementById('hubCodeInput').addEventListener('input',e=>{e.target.value=formatSyncCode(normalizeSyncCode(e.target.value));setHubStatus('')});
 document.getElementById('hubCodeInput').addEventListener('keydown',e=>{if(e.key==='Enter')enterLearningHub()});
+document.getElementById('newAccountBtn').onclick=startNewCloudAccount;
 document.getElementById('openToeicCard').onclick=openToeicApp;
 const EXTERNAL_APP_FRAMES=new Map([[ELECTRICIAN_APP_URL,'electricianAppFrame'],[SENTENCE_FOREST_URL,'sentenceForestAppFrame']]);
 function externalAppUrl(url){const code=getSyncCode(),target=new URL(url);target.searchParams.set('embedded','hub');target.hash=code?`sync=${encodeURIComponent(code)}`:'';return target.href}
@@ -444,12 +460,15 @@ document.getElementById('sideOverlay').onclick=closeSide;
 function showInstallButtons(){document.getElementById('installBtn').classList.remove('hidden');document.getElementById('hubInstallBtn').classList.remove('hidden')}
 async function installLearningHub(){
  if(window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone){toast('이미 앱으로 설치되어 있습니다.');return}
- if(!deferredInstallPrompt){toast(/iPad|iPhone|iPod/.test(navigator.userAgent)?'공유 버튼을 누른 뒤 ‘홈 화면에 추가’를 선택하세요.':'브라우저 메뉴에서 ‘앱 설치’ 또는 ‘홈 화면에 추가’를 선택하세요.');return}
+ if(!deferredInstallPrompt){
+  const link=document.createElement('a');link.href='./학습허브-설치.zip';link.download='학습허브-설치.zip';document.body.appendChild(link);link.click();link.remove();return
+ }
  deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null
 }
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;showInstallButtons()});
 document.getElementById('installBtn').onclick=installLearningHub;
 document.getElementById('hubInstallBtn').onclick=installLearningHub;
+document.getElementById('loginInstallBtn').onclick=installLearningHub;
 window.addEventListener('appinstalled',()=>toast('홈 화면에 앱이 설치되었습니다.'));
 async function registerLearningHubApp(){
  if(!('serviceWorker' in navigator))return;

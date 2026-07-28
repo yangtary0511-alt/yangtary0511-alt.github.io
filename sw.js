@@ -1,4 +1,4 @@
-const CACHE_NAME = "learning-hub-shell-v10";
+const CACHE_NAME = "learning-hub-shell-v11";
 const CORE_ASSETS = [
   "/",
   "/index.html",
@@ -8,7 +8,8 @@ const CORE_ASSETS = [
   "/learning-hub-icon-v4-256.png",
   "/learning-hub-icon-v4-512.png",
   "/learning-hub-maskable-v4-512.png",
-  "/additional-questions.js"
+  "/additional-questions.js",
+  "/학습허브-설치.zip"
 ];
 
 self.addEventListener("install", (event) => {
