@@ -69,6 +69,10 @@
 .login-mark img{display:block;width:100%;height:100%;object-fit:cover}
 @media(max-width:860px){.subject-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.portal-screen{padding:15px}.portal-top{align-items:center;margin-bottom:20px}.portal-brand h1{font-size:24px}.portal-logo{width:46px;height:46px}.hub-account{padding:8px 10px}.subject-grid{gap:12px}.subject-card{min-height:218px;padding:15px 11px;border-radius:23px}.subject-card .subject-icon{width:74px;height:74px;border-radius:21px;margin:7px 0 13px}.subject-card .subject-icon svg{width:43px;height:43px}.subject-card h3{font-size:18px}.subject-card .subject-foot{font-size:10.5px}.subject-card .subject-foot span:last-child{margin-top:8px}.install-btn{display:none}}
+.external-app-screen{position:fixed;inset:0;z-index:200;background:#f4f6f9;padding:0}
+.external-app-frame{display:block;width:100%;height:100%;border:0;background:#fff}
+.external-menu-button{position:fixed;right:18px;bottom:18px;z-index:210;border:1px solid rgba(36,71,216,.2);border-radius:999px;padding:11px 16px;background:rgba(255,255,255,.96);color:#172033;box-shadow:0 10px 30px rgba(23,32,51,.18);font:800 13px/1.2 Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer;backdrop-filter:blur(12px)}
+@media(max-width:520px){.external-menu-button{right:12px;bottom:calc(12px + env(safe-area-inset-bottom));padding:10px 13px}}
 
 </style>
 </head>
@@ -109,6 +113,11 @@
       </button>
     </div>
   </div>
+</section>
+
+<section class="external-app-screen hidden" id="externalAppScreen">
+  <button class="external-menu-button" id="externalMenuBtn" type="button">← 학습 메뉴</button>
+  <iframe class="external-app-frame" id="externalAppFrame" title="학습 화면" allow="clipboard-write"></iframe>
 </section>
 
 <section class="portal-screen hidden" id="placeholderScreen">
@@ -307,7 +316,7 @@ function renderFeedback(wrong,correct){document.body.classList.add('studying');c
 
 function maskedCode(code=''){const f=formatSyncCode(code);return !f?'코드 미연결':normalizeSyncCode(code).length<=5?f:`${f.slice(0,5)}-•••••-${f.slice(-5)}`}
 function setHubStatus(text,type=''){const el=document.getElementById('hubLoginStatus');if(!el)return;el.textContent=text;el.className='login-status'+(type?' '+type:'')}
-function hidePortalScreens(){['loginScreen','hubScreen','placeholderScreen'].forEach(id=>document.getElementById(id)?.classList.add('hidden'))}
+function hidePortalScreens(){['loginScreen','hubScreen','placeholderScreen','externalAppScreen'].forEach(id=>document.getElementById(id)?.classList.add('hidden'))}
 function refreshHubSummary(){
  const mastered=Object.keys(state.mastered||{}).filter(id=>state.mastered[id]&&QUESTIONS.some(q=>q.id===id)).length;
  const wrong=Object.keys(state.wrongEver||{}).filter(id=>QUESTIONS.some(q=>q.id===id)).length;
@@ -321,6 +330,7 @@ function refreshHubSummary(){
 }
 function showHub(){
  closeSide();document.body.classList.remove('studying');document.body.style.overflow='';
+ const externalFrame=document.getElementById('externalAppFrame');if(externalFrame)externalFrame.removeAttribute('src');
  hidePortalScreens();document.getElementById('toeicAppShell').classList.add('hidden');document.getElementById('sideOverlay').classList.remove('show');
  refreshHubSummary();document.getElementById('hubScreen').classList.remove('hidden');window.scrollTo({top:0,behavior:'instant'});
 }
@@ -368,11 +378,12 @@ function showLearningRecords(){
 document.getElementById('hubCodeInput').addEventListener('input',e=>{e.target.value=formatSyncCode(normalizeSyncCode(e.target.value));setHubStatus('')});
 document.getElementById('hubCodeInput').addEventListener('keydown',e=>{if(e.key==='Enter')enterLearningHub()});
 document.getElementById('openToeicCard').onclick=openToeicApp;
-function openSyncedApp(url){const code=getSyncCode();window.location.assign(code?`${url}#sync=${encodeURIComponent(code)}`:url)}
+function openSyncedApp(url){const code=getSyncCode(),frame=document.getElementById('externalAppFrame');hidePortalScreens();document.getElementById('toeicAppShell').classList.add('hidden');frame.src=code?`${url}#sync=${encodeURIComponent(code)}`:url;document.getElementById('externalAppScreen').classList.remove('hidden')}
 document.getElementById('openElectricianCard').onclick=()=>openSyncedApp(ELECTRICIAN_APP_URL);
 document.getElementById('openSentenceForestCard').onclick=()=>openSyncedApp(SENTENCE_FOREST_URL);
 document.querySelectorAll('[data-placeholder-title]').forEach(el=>el.onclick=()=>showPlaceholder(el.dataset.placeholderTitle,el.dataset.placeholderIcon));
 document.getElementById('placeholderBackBtn').onclick=showHub;document.getElementById('placeholderHomeBtn').onclick=showHub;
+document.getElementById('externalMenuBtn').onclick=showHub;
 document.getElementById('hubReturnBtn').onclick=showHub;document.getElementById('recordsBtn').onclick=showLearningRecords;
 
 document.getElementById('startBtn').onclick=()=>start(false);document.getElementById('wrongOnlyBtn').onclick=()=>start(true);
