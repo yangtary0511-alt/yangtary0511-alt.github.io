@@ -1,13 +1,12 @@
-const CACHE_NAME = "learning-hub-shell-v11";
+const CACHE_NAME = "learning-hub-shell-v12";
 const CORE_ASSETS = [
   "/",
   "/index.html",
-  "/manifest-v4.webmanifest",
-  "/learning-hub-icon-v4-180.png",
-  "/learning-hub-icon-v4-192.png",
-  "/learning-hub-icon-v4-256.png",
-  "/learning-hub-icon-v4-512.png",
-  "/learning-hub-maskable-v4-512.png",
+  "/manifest-v5.webmanifest",
+  "/learning-hub-icon-v5-180.png",
+  "/learning-hub-icon-v5-192.png",
+  "/learning-hub-icon-v5-256.png",
+  "/learning-hub-icon-v5-512.png",
   "/additional-questions.js",
   "/학습허브-설치.zip"
 ];
