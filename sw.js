@@ -1,11 +1,12 @@
-const CACHE_NAME = "learning-hub-shell-v4";
+const CACHE_NAME = "learning-hub-shell-v5";
 const CORE_ASSETS = [
   "/",
   "/index.html",
-  "/manifest.webmanifest",
-  "/app-icon-192.png",
-  "/app-icon-512.png",
-  "/apple-touch-icon.png"
+  "/manifest-v2.webmanifest",
+  "/learning-hub-icon-v2-180.png",
+  "/learning-hub-icon-v2-192.png",
+  "/learning-hub-icon-v2-256.png",
+  "/learning-hub-icon-v2-512.png"
 ];
 
 self.addEventListener("install", (event) => {
