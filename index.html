@@ -72,8 +72,8 @@
       <button class="subject-card" id="openToeicCard">
         <span class="ready-pill">사용 가능</span><div class="subject-icon">🇬🇧</div><h3>TOEIC</h3><p>오답과 같은 함정의 변형 문제를 맞힐 때까지 반복합니다.</p><div class="subject-foot"><span id="toeicCardProgress">진행 기록 불러오는 중</span><span>열기 →</span></div>
       </button>
-      <button class="subject-card placeholder" data-placeholder-title="전기기사" data-placeholder-icon="⚡">
-        <span class="soon-pill">준비 중</span><div class="subject-icon">⚡</div><h3>전기기사</h3><p>기출문제, 오답노트, 과목별 반복 학습 메뉴가 들어갈 자리입니다.</p><div class="subject-foot"><span>메뉴 틀 생성 완료</span><span>보기 →</span></div>
+      <button class="subject-card" id="openElectricianCard">
+        <span class="ready-pill">사용 가능</span><div class="subject-icon">⚡</div><h3>전기기사</h3><p>2025년 제1회 필기 100문제를 기존 학습 기록 그대로 이어서 풉니다.</p><div class="subject-foot"><span>1~20 완료 · 오답 7개 · 다음 21번</span><span>열기 →</span></div>
       </button>
       <button class="subject-card placeholder" data-placeholder-title="단어 공부" data-placeholder-icon="Aa">
         <span class="soon-pill">준비 중</span><div class="subject-icon">Aa</div><h3>단어 공부</h3><p>단어 카드, 뜻 맞히기, 누적 오답 복습 기능으로 확장할 자리입니다.</p><div class="subject-foot"><span>메뉴 틀 생성 완료</span><span>보기 →</span></div>
@@ -149,6 +149,7 @@ const SYNC_ENDPOINT = 'https://arbzmgsknhsipszfawjy.supabase.co/functions/v1/lea
 const MIN_SYNC_CODE_LENGTH = 4;
 const MAX_SYNC_CODE_LENGTH = 64;
 const SYNC_TIMEOUT_MS = 8000;
+const ELECTRICIAN_APP_URL = 'https://jeongi-gisa-quiz-2025-1.yangdohyun0105.chatgpt.site/';
 const letters = ['A','B','C','D','E'];
 const memoryStorage = new Map();
 const safeStorage = {
@@ -333,6 +334,7 @@ function showLearningRecords(){
 document.getElementById('hubCodeInput').addEventListener('input',e=>{e.target.value=formatSyncCode(normalizeSyncCode(e.target.value));setHubStatus('')});
 document.getElementById('hubCodeInput').addEventListener('keydown',e=>{if(e.key==='Enter')enterLearningHub()});
 document.getElementById('openToeicCard').onclick=openToeicApp;
+document.getElementById('openElectricianCard').onclick=()=>window.location.assign(ELECTRICIAN_APP_URL);
 document.querySelectorAll('[data-placeholder-title]').forEach(el=>el.onclick=()=>showPlaceholder(el.dataset.placeholderTitle,el.dataset.placeholderIcon));
 document.getElementById('placeholderBackBtn').onclick=showHub;document.getElementById('placeholderHomeBtn').onclick=showHub;
 document.getElementById('hubReturnBtn').onclick=showHub;document.getElementById('recordsBtn').onclick=showLearningRecords;
