@@ -1,12 +1,14 @@
-const CACHE_NAME = "learning-hub-shell-v9";
+const CACHE_NAME = "learning-hub-shell-v10";
 const CORE_ASSETS = [
   "/",
   "/index.html",
-  "/manifest-v3.webmanifest",
-  "/learning-hub-icon-v3-180.png",
-  "/learning-hub-icon-v3-192.png",
-  "/learning-hub-icon-v3-256.png",
-  "/learning-hub-icon-v3-512.png"
+  "/manifest-v4.webmanifest",
+  "/learning-hub-icon-v4-180.png",
+  "/learning-hub-icon-v4-192.png",
+  "/learning-hub-icon-v4-256.png",
+  "/learning-hub-icon-v4-512.png",
+  "/learning-hub-maskable-v4-512.png",
+  "/additional-questions.js"
 ];
 
 self.addEventListener("install", (event) => {
