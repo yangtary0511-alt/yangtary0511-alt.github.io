@@ -110,7 +110,7 @@
         <span class="ready-pill">사용 가능</span><div class="subject-icon icon-toeic"><svg viewBox="0 0 64 64" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" d="M12 14h16c5 0 9 4 9 9v29c0-5-4-9-9-9H12V14Zm40 0H36c-5 0-9 4-9 9v29c0-5 4-9 9-9h16V14Z"/><path fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" d="M18 23h10m-10 8h10m18-8H36m10 8H36"/></svg></div><h3>TOEIC</h3><p>오답과 같은 함정의 변형 문제를 맞힐 때까지 반복합니다.</p><div class="subject-foot"><span id="toeicCardProgress">진행 기록 불러오는 중</span><span>열기</span></div>
       </button>
       <button class="subject-card" id="openElectricianCard">
-        <span class="ready-pill">사용 가능</span><div class="subject-icon icon-electric"><svg viewBox="0 0 64 64" aria-hidden="true"><path fill="currentColor" d="M37 5 14 36h17l-4 23 23-33H34l3-21Z"/></svg></div><h3>전기기사</h3><p>2025년 제1회 필기 100문제를 기존 학습 기록 그대로 이어서 풉니다.</p><div class="subject-foot"><span>1~20 완료 · 오답 7개<br>다음 21번</span><span>열기</span></div>
+        <span class="ready-pill">사용 가능</span><div class="subject-icon icon-electric"><svg viewBox="0 0 64 64" aria-hidden="true"><path fill="currentColor" d="M37 5 14 36h17l-4 23 23-33H34l3-21Z"/></svg></div><h3>전기기사</h3><p>2025년 제1회 필기 100문제를 기존 학습 기록 그대로 이어서 풉니다.</p><div class="subject-foot"><span id="electricianCardProgress">진행 기록 불러오는 중</span><span>열기</span></div>
       </button>
       <button class="subject-card" id="openSentenceForestCard">
         <span class="ready-pill">사용 가능</span><div class="subject-icon icon-forest"><svg viewBox="0 0 64 64" aria-hidden="true"><path fill="currentColor" d="M32 5 17 25h8L13 40h13L16 52h32L38 40h13L39 25h8L32 5Z"/><path fill="#d7f7e7" d="M29 48h6v11h-6z"/></svg></div><h3>문장의 숲</h3><p>TOEIC Part 5·6을 TEST별로 풀고, 틀린 문제만 없어질 때까지 반복합니다.</p><div class="subject-foot"><span>920문제<br>단계별 상세 해설</span><span>열기</span></div>
@@ -338,6 +338,7 @@ function refreshHubSummary(){
  if(wrongEl)wrongEl.textContent=wrong.toLocaleString('ko-KR');
  if(masteredEl)masteredEl.textContent=mastered.toLocaleString('ko-KR');
  document.getElementById('toeicCardProgress').textContent=`${mastered}/${QUESTIONS.length}문제 소거 · 오답 ${wrong}개`;
+ document.getElementById('electricianCardProgress').innerHTML=getSyncCode()==='0105'?'1~20 완료 · 오답 7개<br>다음 21번':'0/100 시작 · 오답 0개<br>다음 1번';
  document.getElementById('hubAccountLabel').textContent=`${maskedCode(getSyncCode())} 연결됨`;
 }
 function showHub(){
