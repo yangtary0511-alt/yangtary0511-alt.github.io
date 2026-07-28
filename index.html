@@ -100,6 +100,7 @@
         <button class="portal-btn secondary" id="newAccountBtn" type="button">새 아이디 만들기</button>
         <button class="portal-btn install" id="loginInstallBtn" type="button">앱 다운로드</button>
       </div>
+      <button class="portal-btn secondary" id="guestLoginBtn" type="button">비회원으로 시작</button>
       <div class="signup-panel hidden" id="signupPanel">
         <div class="login-label">이름</div>
         <input class="portal-input" id="signupNameInput" maxlength="30" placeholder="이름을 입력하세요" autocomplete="name" />
@@ -209,6 +210,7 @@ const QUESTIONS = [{"id": "o001", "source": "오답 정리 1", "date": "날짜 �
 QUESTIONS.push(...window.ADDITIONAL_QUESTIONS);
 const KEY = 'toeic_wrong_elimination_v1';
 const HUB_SYNC_CODE_KEY = 'learning_hub_sync_code_v1';
+const GUEST_SESSION_KEY = 'learning_hub_guest_session_v1';
 const SYNC_CODE_KEY = 'toeic_sync_code_v1';
 const DEVICE_ID_KEY = 'toeic_device_id_v1';
 const LEGACY_CACHE_CLEANUP_KEY = 'learning_hub_legacy_cache_cleanup_v1';
@@ -254,6 +256,7 @@ function isValidSyncCode(v=''){const length=normalizeSyncCode(v).length;return l
 function getSyncCode(){return normalizeSyncCode(safeStorage.getItem(HUB_SYNC_CODE_KEY)||safeStorage.getItem(SYNC_CODE_KEY)||'')}
 function saveSyncCode(code){const c=normalizeSyncCode(code);safeStorage.setItem(HUB_SYNC_CODE_KEY,c);safeStorage.setItem(SYNC_CODE_KEY,c);return c}
 function clearSyncCode(){safeStorage.removeItem(HUB_SYNC_CODE_KEY);safeStorage.removeItem(SYNC_CODE_KEY)}
+function isGuestSession(){return safeStorage.getItem(GUEST_SESSION_KEY)==='1'}
 function generateSyncCode(){const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',bytes=new Uint8Array(20);crypto.getRandomValues(bytes);return [...bytes].map(b=>chars[b%chars.length]).join('')}
 function historyKey(h){return h.eventId||JSON.stringify([h.at,h.round,h.ids,h.wrong])}
 function mergeStates(a,b){
@@ -358,7 +361,7 @@ function refreshHubSummary(){
  if(masteredEl)masteredEl.textContent=mastered.toLocaleString('ko-KR');
  document.getElementById('toeicCardProgress').textContent=`${mastered}/${QUESTIONS.length}문제 소거 · 오답 ${wrong}개`;
  document.getElementById('electricianCardProgress').innerHTML=getSyncCode()==='0105'?'1~20 완료 · 오답 7개<br>다음 21번':'0/100 시작 · 오답 0개<br>다음 1번';
- const owner=String(state.profile?.name||'').trim();document.getElementById('hubAccountLabel').textContent=owner?`${owner} · ${maskedCode(getSyncCode())}`:`${maskedCode(getSyncCode())} 연결됨`;
+ const owner=String(state.profile?.name||'').trim();document.getElementById('hubAccountLabel').textContent=isGuestSession()?'비회원 · 이 기기에만 저장':owner?`${owner} · ${maskedCode(getSyncCode())}`:`${maskedCode(getSyncCode())} 연결됨`;
 }
 function showHub(){
  closeSide();document.body.classList.remove('studying');document.body.style.overflow='';
@@ -380,7 +383,7 @@ async function enterLearningHub(){
  if(previousCode!==code){state=normalizeState(defaultState());session=null;localWrite()}
  try{
   const ok=await cloudSync({codeOverride:code,createIfMissing:false,quiet:true});
-  if(ok){input.value='';showHub();refreshHubSummary();toast('클라우드 기록을 불러왔습니다.');}
+  if(ok){safeStorage.removeItem(GUEST_SESSION_KEY);input.value='';showHub();refreshHubSummary();toast('클라우드 기록을 불러왔습니다.');}
   else{state=previousState;session=previousSession;localWrite();if(previousCode)saveSyncCode(previousCode);else clearSyncCode();setHubStatus('아이디를 확인해 주세요.','warn')}
  }catch(e){state=previousState;session=previousSession;localWrite();if(previousCode)saveSyncCode(previousCode);else clearSyncCode();setHubStatus('연결하지 못했습니다. 다시 시도해 주세요.','warn')}
  finally{btn.disabled=false}
@@ -407,7 +410,7 @@ async function startNewCloudAccount(){
   state=normalizeState({...defaultState(),profile:{name,createdAt:new Date().toISOString()}});session=null;saveSyncCode(code);localWrite();
   const ok=await cloudSync({codeOverride:code,createIfMissing:true,quiet:true});
   if(!ok)throw new Error('account_create_failed');
-  document.getElementById('hubCodeInput').value='';toggleSignup(false);showHub();refreshHubSummary();toast(`${name}님의 계정을 만들었습니다.`);
+  safeStorage.removeItem(GUEST_SESSION_KEY);document.getElementById('hubCodeInput').value='';toggleSignup(false);showHub();refreshHubSummary();toast(`${name}님의 계정을 만들었습니다.`);
  }catch(e){
   state=previousState;session=previousSession;localWrite();if(previousCode)saveSyncCode(previousCode);else clearSyncCode();
   setHubStatus('새 계정을 만들지 못했습니다. 다시 시도해 주세요.','warn');
@@ -418,10 +421,19 @@ function initLearningHub(){
  toggleSignup(false);
  document.getElementById('loginScreen').classList.remove('hidden');document.getElementById('hubScreen').classList.add('hidden');document.getElementById('placeholderScreen').classList.add('hidden');document.getElementById('toeicAppShell').classList.add('hidden');
 }
+async function startGuestSession(){
+ const btn=document.getElementById('guestLoginBtn'),wasGuest=isGuestSession();btn.disabled=true;setHubStatus('비회원 학습을 여는 중…');
+ try{
+  if(getSyncCode())await cloudSync({quiet:true,createIfMissing:true});
+  clearSyncCode();
+  if(!wasGuest){state=normalizeState(defaultState());session=null;localWrite()}
+  safeStorage.setItem(GUEST_SESSION_KEY,'1');showHub();refreshHubSummary();toast('비회원으로 시작했습니다.');
+ }finally{btn.disabled=false}
+}
 async function logoutLearningHub(){
  const btn=document.getElementById('hubLogoutBtn');btn.disabled=true;
  try{if(getSyncCode())await cloudSync({quiet:true,createIfMissing:true})}finally{
-  clearSyncCode();state=normalizeState(defaultState());session=null;localWrite();hidePortalScreens();initLearningHub();setHubStatus('로그아웃했습니다.','ok');btn.disabled=false;window.scrollTo({top:0,behavior:'instant'});
+  clearSyncCode();safeStorage.removeItem(GUEST_SESSION_KEY);state=normalizeState(defaultState());session=null;localWrite();hidePortalScreens();initLearningHub();setHubStatus('로그아웃했습니다.','ok');btn.disabled=false;window.scrollTo({top:0,behavior:'instant'});
  }
 }
 function getWrongFrequency(){
@@ -442,6 +454,7 @@ function showLearningRecords(){
 document.getElementById('hubCodeInput').addEventListener('input',e=>{e.target.value=formatSyncCode(normalizeSyncCode(e.target.value));setHubStatus('')});
 document.getElementById('hubCodeInput').addEventListener('keydown',e=>{if(e.key==='Enter')enterLearningHub()});
 document.getElementById('newAccountBtn').onclick=()=>toggleSignup(true);
+document.getElementById('guestLoginBtn').onclick=startGuestSession;
 document.getElementById('signupCancelBtn').onclick=()=>toggleSignup(false);
 document.getElementById('signupSubmitBtn').onclick=startNewCloudAccount;
 document.getElementById('hubLogoutBtn').onclick=logoutLearningHub;
