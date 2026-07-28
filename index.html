@@ -121,7 +121,7 @@
   <div class="portal-wrap">
     <div class="portal-top">
       <div class="portal-brand"><div class="portal-logo"><img src="./learning-hub-icon-v5-192.png" alt="" /></div><div><h1>내 학습 허브</h1><p>과목을 선택해 학습을 시작하세요.</p></div></div>
-      <div class="top-actions"><button class="portal-link-btn install-btn" id="hubInstallBtn">앱 설치</button><div class="hub-account"><span class="account-dot"></span><span id="hubAccountLabel">클라우드 연결됨</span></div></div>
+      <div class="top-actions"><button class="portal-link-btn install-btn" id="hubInstallBtn">앱 설치</button><div class="hub-account"><span class="account-dot"></span><span id="hubAccountLabel">클라우드 연결됨</span></div><button class="portal-link-btn" id="hubLogoutBtn" type="button">로그아웃</button></div>
     </div>
     <div class="subject-grid">
       <button class="subject-card" id="openToeicCard">
@@ -418,6 +418,12 @@ function initLearningHub(){
  toggleSignup(false);
  document.getElementById('loginScreen').classList.remove('hidden');document.getElementById('hubScreen').classList.add('hidden');document.getElementById('placeholderScreen').classList.add('hidden');document.getElementById('toeicAppShell').classList.add('hidden');
 }
+async function logoutLearningHub(){
+ const btn=document.getElementById('hubLogoutBtn');btn.disabled=true;
+ try{if(getSyncCode())await cloudSync({quiet:true,createIfMissing:true})}finally{
+  clearSyncCode();state=normalizeState(defaultState());session=null;localWrite();hidePortalScreens();initLearningHub();setHubStatus('로그아웃했습니다.','ok');btn.disabled=false;window.scrollTo({top:0,behavior:'instant'});
+ }
+}
 function getWrongFrequency(){
  const counts={};for(const h of state.history||[]){for(const id of h.wrong||[])counts[id]=(counts[id]||0)+1}
  for(const id of Object.keys(state.wrongEver||{}))if(!counts[id])counts[id]=1;return counts;
@@ -438,6 +444,7 @@ document.getElementById('hubCodeInput').addEventListener('keydown',e=>{if(e.key=
 document.getElementById('newAccountBtn').onclick=()=>toggleSignup(true);
 document.getElementById('signupCancelBtn').onclick=()=>toggleSignup(false);
 document.getElementById('signupSubmitBtn').onclick=startNewCloudAccount;
+document.getElementById('hubLogoutBtn').onclick=logoutLearningHub;
 ['signupIdInput','signupIdConfirmInput'].forEach(id=>document.getElementById(id).addEventListener('input',e=>{e.target.value=normalizeSyncCode(e.target.value);setHubStatus('')}));
 ['signupNameInput','signupIdInput','signupIdConfirmInput'].forEach(id=>document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter')startNewCloudAccount()}));
 document.getElementById('openToeicCard').onclick=openToeicApp;
