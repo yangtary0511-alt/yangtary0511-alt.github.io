@@ -54,7 +54,7 @@
       <h1>내 학습 허브</h1>
       <p>동기화 코드 하나로 모든 과목의 학습 기록을 이어갑니다.</p>
       <div class="login-label">학습 동기화 코드</div>
-      <input class="portal-input" id="hubCodeInput" maxlength="32" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off" spellcheck="false" />
+      <input class="portal-input" id="hubCodeInput" maxlength="64" placeholder="동기화 코드 (4~64자)" autocomplete="off" spellcheck="false" />
       <button class="portal-btn primary" id="hubLoginBtn" type="button" onclick="enterLearningHub()">학습 앱 열기</button>
       <div class="login-status" id="hubLoginStatus"></div>
       <div class="login-note">처음 사용하는 기기에서는 기존 코드를 입력하세요. 같은 코드를 사용하면 TOEIC 진행 기록과 풀던 회차를 클라우드에서 불러옵니다.</div>
@@ -129,7 +129,7 @@
         <strong>기기 간 자동 동기화</strong>
         <div class="sync-status" id="syncStatus">동기화 코드를 연결하면 휴대폰과 컴퓨터의 기록이 자동으로 합쳐집니다.</div>
         <div id="syncDisconnected">
-          <input class="sync-input" id="syncCodeInput" maxlength="32" placeholder="다른 기기의 동기화 코드 입력" autocomplete="off" spellcheck="false">
+          <input class="sync-input" id="syncCodeInput" maxlength="64" placeholder="다른 기기의 동기화 코드 입력" autocomplete="off" spellcheck="false">
           <div class="sync-actions"><button class="btn primary" id="createSyncBtn">새 코드 만들기</button><button class="btn secondary" id="connectSyncBtn">기존 코드 연결</button></div>
         </div>
         <div id="syncConnected" class="hidden">
@@ -154,7 +154,11 @@ const KEY = 'toeic_wrong_elimination_v1';
 const HUB_SYNC_CODE_KEY = 'learning_hub_sync_code_v1';
 const SYNC_CODE_KEY = 'toeic_sync_code_v1';
 const DEVICE_ID_KEY = 'toeic_device_id_v1';
-const SYNC_ENDPOINT = 'https://arbzmgsknhsipszfawjy.supabase.co/functions/v1/toeic-app/sync';
+const LEGACY_CACHE_CLEANUP_KEY = 'learning_hub_legacy_cache_cleanup_v1';
+const SYNC_ENDPOINT = 'https://arbzmgsknhsipszfawjy.supabase.co/functions/v1/learning-sync';
+const MIN_SYNC_CODE_LENGTH = 4;
+const MAX_SYNC_CODE_LENGTH = 64;
+const SYNC_TIMEOUT_MS = 8000;
 const letters = ['A','B','C','D','E'];
 const memoryStorage = new Map();
 const safeStorage = {
@@ -187,6 +191,7 @@ function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t
 
 function normalizeSyncCode(v=''){return String(v).toUpperCase().replace(/[^A-Z0-9]/g,'')}
 function formatSyncCode(v=''){const c=normalizeSyncCode(v);return c.match(/.{1,5}/g)?.join('-')||''}
+function isValidSyncCode(v=''){const length=normalizeSyncCode(v).length;return length>=MIN_SYNC_CODE_LENGTH&&length<=MAX_SYNC_CODE_LENGTH}
 function getSyncCode(){return normalizeSyncCode(safeStorage.getItem(HUB_SYNC_CODE_KEY)||safeStorage.getItem(SYNC_CODE_KEY)||'')}
 function saveSyncCode(code){const c=normalizeSyncCode(code);safeStorage.setItem(HUB_SYNC_CODE_KEY,c);safeStorage.setItem(SYNC_CODE_KEY,c);return c}
 function generateSyncCode(){const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',bytes=new Uint8Array(20);crypto.getRandomValues(bytes);return [...bytes].map(b=>chars[b%chars.length]).join('')}
@@ -202,18 +207,22 @@ function mergeStates(a,b){
 function setSyncStatus(text,type=''){const el=document.getElementById('syncStatus');if(!el)return;el.textContent=text;el.className='sync-status'+(type?' '+type:'')}
 function renderSyncUi(){const code=getSyncCode(),off=document.getElementById('syncDisconnected'),on=document.getElementById('syncConnected');if(!off||!on)return;off.classList.toggle('hidden',!!code);on.classList.toggle('hidden',!code);if(code){document.getElementById('syncCodeDisplay').textContent=formatSyncCode(code);setSyncStatus(navigator.onLine?'자동 동기화 연결됨':'오프라인 · 연결되면 자동 동기화','ok')}else setSyncStatus('동기화 코드를 연결하면 휴대폰과 컴퓨터의 기록이 자동으로 합쳐집니다.')}
 function scheduleCloudSync(delay=700){clearTimeout(syncTimer);syncTimer=setTimeout(()=>cloudSync({quiet:true,createIfMissing:true}),delay)}
-async function pushCloud(code,current){const res=await fetch(SYNC_ENDPOINT,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,state:current})});if(!res.ok)throw new Error('save_failed');return res.json()}
+async function fetchWithTimeout(url,options={}){
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),SYNC_TIMEOUT_MS);
+ try{return await fetch(url,{...options,signal:controller.signal})}finally{clearTimeout(timer)}
+}
+async function pushCloud(code,current){const res=await fetchWithTimeout(SYNC_ENDPOINT,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,state:current})});if(!res.ok)throw new Error('save_failed');return res.json()}
 async function cloudSync({quiet=false,createIfMissing=false,codeOverride=''}={}){
- const code=normalizeSyncCode(codeOverride||getSyncCode());if(code.length<16){if(!quiet)setSyncStatus('유효한 동기화 코드를 입력하세요.','warn');return false}if(syncInFlight)return false;if(!navigator.onLine){setSyncStatus('오프라인 · 인터넷 연결 후 자동 동기화','warn');return false}
+ const code=normalizeSyncCode(codeOverride||getSyncCode());if(!isValidSyncCode(code)){if(!quiet)setSyncStatus('4~64자의 동기화 코드를 입력하세요.','warn');return false}if(syncInFlight)return false;if(!navigator.onLine){setSyncStatus('오프라인 · 인터넷 연결 후 자동 동기화','warn');return false}
  syncInFlight=true;setSyncStatus('클라우드와 동기화 중…');
  try{
-  const res=await fetch(`${SYNC_ENDPOINT}?code=${encodeURIComponent(code)}`,{cache:'no-store'});let cloud=null;
+  const res=await fetchWithTimeout(`${SYNC_ENDPOINT}?code=${encodeURIComponent(code)}`,{cache:'no-store'});let cloud=null;
   if(res.status===404){if(!createIfMissing){setSyncStatus('해당 동기화 코드를 찾지 못했습니다.','warn');return false}await pushCloud(code,state)}
   else if(!res.ok)throw new Error('load_failed');
   else{const data=await res.json();cloud=data.state}
   if(cloud){state=mergeStates(state,cloud);localWrite();if(!session&&state.activeSession)home();await pushCloud(code,state)}
   saveSyncCode(code);renderSyncUi();setSyncStatus(`동기화 완료 · ${new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}`,'ok');if(!quiet)toast('진행 상황을 동기화했습니다.');return true
- }catch(e){setSyncStatus('동기화 실패 · 인터넷 연결 후 다시 시도','warn');if(!quiet)toast('동기화하지 못했습니다.');return false}finally{syncInFlight=false}
+ }catch(e){const timedOut=e?.name==='AbortError';console.warn('Cloud sync failed',e);setSyncStatus(timedOut?'동기화 시간 초과 · 로컬 기록은 안전하게 유지됩니다.':'동기화 실패 · 로컬 기록은 안전하게 유지됩니다.','warn');if(!quiet)toast(timedOut?'연결이 느려 로컬 모드로 계속합니다.':'동기화하지 못해 로컬 모드로 계속합니다.');return false}finally{syncInFlight=false}
 }
 function persistSession(){if(!session)return;state.activeSession={...session,updatedAt:Date.now()};saveState()}
 function resumeSession(){if(!state.activeSession?.roundIds?.length){toast('이어갈 학습이 없습니다.');return}session={...state.activeSession,answers:{...(state.activeSession.answers||{})},roundIds:[...state.activeSession.roundIds],baseIds:[...(state.activeSession.baseIds||state.activeSession.roundIds)]};closeSide();renderQuestion()}
@@ -271,7 +280,7 @@ function submitRound(){const missing=session.roundIds.filter(id=>!Object.prototy
 function renderFeedback(wrong,correct){document.body.classList.add('studying');const total=wrong.length+correct.length;const pct=Math.round(correct.length/total*100);document.getElementById('main').innerHTML=`<div class="feedback-head"><div><span class="chip">회차 ${session.round} 결과</span><h2>채점 완료</h2></div><div class="score">${correct.length}/${total}</div></div><div class="callout">정답률 ${pct}% · 맞힌 ${correct.length}문제는 소거되었습니다. ${wrong.length?`틀린 ${wrong.length}문제만 다시 남습니다.`:'이번 학습 묶음을 모두 소거했습니다.'}</div>${wrong.length?wrong.map(id=>{const q=qById(id),chosen=session.answers[id];return `<article class="wrong-card"><div class="qmeta"><span class="chip">${escapeHtml(q.part)}</span><span class="chip">${escapeHtml(q.skill)}</span><span class="chip">${escapeHtml(q.kind)}</span></div><h3>${escapeHtml(q.question)}</h3><div class="answer-row wrong">내 답: ${letters[chosen]}. ${escapeHtml(q.choices[chosen])}</div><div class="answer-row correct">정답: ${letters[q.answer]}. ${escapeHtml(q.choices[q.answer])}</div><div class="explain"><b>피드백</b><br>${escapeHtml(q.explanation)}</div>${translationFeedback(q)}</article>`}).join(''):`<section class="done"><div class="big">✓</div><h2>이번 학습 묶음의 오답이 0개입니다.</h2><p>맞힌 문제는 학습 목록에서 소거되었습니다.</p></section>`}<div class="nav">${wrong.length?'<button class="btn primary" id="retryBtn">틀린 문제만 다시 풀기</button>':''}<button class="btn secondary" id="homeBtn">학습 현황으로</button></div>`;if(wrong.length)document.getElementById('retryBtn').onclick=()=>{session.round++;session.roundIds=shuffle(wrong);session.answers={};session.index=0;persistSession();renderQuestion()};document.getElementById('homeBtn').onclick=()=>{state.activeSession=null;saveState();home()}}
 
 
-function maskedCode(code=''){const f=formatSyncCode(code);return f?`${f.slice(0,5)}-•••••-${f.slice(-5)}`:'코드 미연결'}
+function maskedCode(code=''){const f=formatSyncCode(code);return !f?'코드 미연결':normalizeSyncCode(code).length<=5?f:`${f.slice(0,5)}-•••••-${f.slice(-5)}`}
 function setHubStatus(text,type=''){const el=document.getElementById('hubLoginStatus');if(!el)return;el.textContent=text;el.className='login-status'+(type?' '+type:'')}
 function hidePortalScreens(){['loginScreen','hubScreen','placeholderScreen'].forEach(id=>document.getElementById(id)?.classList.add('hidden'))}
 function refreshHubSummary(){
@@ -297,18 +306,19 @@ function showPlaceholder(title,icon){
 }
 async function enterLearningHub(){
  const input=document.getElementById('hubCodeInput');const code=normalizeSyncCode(input.value);
- if(code.length<16){setHubStatus('동기화 코드를 정확히 입력하세요.','warn');return}
+ if(!isValidSyncCode(code)){setHubStatus('4~64자의 동기화 코드를 입력하세요.','warn');return}
  const btn=document.getElementById('hubLoginBtn');btn.disabled=true;setHubStatus('학습 메뉴를 여는 중…');
  saveSyncCode(code);
  // 메뉴는 즉시 연다. 클라우드 동기화는 뒤에서 진행해 네트워크 지연 때문에 입구가 막히지 않게 한다.
  showHub();
+ const slowNotice=setTimeout(()=>setSyncStatus('연결이 느립니다 · 메뉴는 로컬 모드로 사용할 수 있습니다.','warn'),3000);
  try{
   const ok=await cloudSync({codeOverride:code,createIfMissing:false,quiet:true});
   if(ok){refreshHubSummary();toast('클라우드 기록을 불러왔습니다.');}
   else if(!navigator.onLine){toast('오프라인 기록으로 시작했습니다.');}
   else{toast('메뉴는 열렸지만 동기화에 실패했습니다. 잠시 뒤 다시 시도합니다.');setTimeout(()=>cloudSync({codeOverride:code,createIfMissing:false,quiet:true}),1500);}
  }catch(e){toast('메뉴는 열렸습니다. 동기화는 자동으로 다시 시도합니다.');}
- finally{btn.disabled=false}
+ finally{clearTimeout(slowNotice);btn.disabled=false}
 }
 function initLearningHub(){
  const code=getSyncCode(),input=document.getElementById('hubCodeInput');if(code){input.value=formatSyncCode(code);document.getElementById('hubLoginBtn').textContent='저장된 코드로 시작'}
@@ -342,7 +352,7 @@ document.getElementById('exportBtn').onclick=()=>{const blob=new Blob([JSON.stri
 document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();document.getElementById('importFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{state=normalizeState(JSON.parse(r.result));saveState();home();toast('진행상황을 불러왔습니다.')}catch(err){alert('올바른 진행상황 파일이 아닙니다.')}};r.readAsText(f)};
 
 document.getElementById('createSyncBtn').onclick=async()=>{const code=generateSyncCode();saveSyncCode(code);renderSyncUi();await cloudSync({createIfMissing:true});try{await navigator.clipboard.writeText(formatSyncCode(code));toast('동기화 코드를 만들고 복사했습니다.')}catch{toast('동기화 코드를 만들었습니다.')}};
-document.getElementById('connectSyncBtn').onclick=async()=>{const input=document.getElementById('syncCodeInput'),code=normalizeSyncCode(input.value);if(code.length<16){setSyncStatus('동기화 코드를 정확히 입력하세요.','warn');return}const ok=await cloudSync({codeOverride:code,createIfMissing:false});if(ok){saveSyncCode(code);input.value='';renderSyncUi()}};
+document.getElementById('connectSyncBtn').onclick=async()=>{const input=document.getElementById('syncCodeInput'),code=normalizeSyncCode(input.value);if(!isValidSyncCode(code)){setSyncStatus('4~64자의 동기화 코드를 입력하세요.','warn');return}const ok=await cloudSync({codeOverride:code,createIfMissing:false});if(ok){saveSyncCode(code);input.value='';renderSyncUi()}};
 document.getElementById('copySyncCodeBtn').onclick=async()=>{try{await navigator.clipboard.writeText(formatSyncCode(getSyncCode()));toast('동기화 코드를 복사했습니다.')}catch{toast('코드를 길게 눌러 복사하세요.')}};
 document.getElementById('syncNowBtn').onclick=()=>cloudSync({quiet:false,createIfMissing:true});
 document.getElementById('disconnectSyncBtn').onclick=()=>{if(confirm('이 기기의 자동 동기화 연결만 해제할까요? 현재 기록은 이 기기에 그대로 남습니다.')){safeStorage.removeItem(SYNC_CODE_KEY);safeStorage.removeItem(HUB_SYNC_CODE_KEY);renderSyncUi();toast('이 기기의 동기화를 해제했습니다.')}};
@@ -364,10 +374,19 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 document.getElementById('installBtn').onclick=async()=>{if(!deferredInstallPrompt){toast('브라우저 메뉴에서 홈 화면에 추가를 선택하세요.');return}deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;document.getElementById('installBtn').classList.add('hidden')};
 window.addEventListener('appinstalled',()=>toast('홈 화면에 앱이 설치되었습니다.'));
 // GitHub Pages one-file version: service worker omitted
+async function clearLegacyAppCachesOnce(){
+ if(safeStorage.getItem(LEGACY_CACHE_CLEANUP_KEY))return;
+ try{
+  if('serviceWorker' in navigator){const registrations=await navigator.serviceWorker.getRegistrations();await Promise.all(registrations.map(registration=>registration.unregister()))}
+  if('caches' in window){const names=await caches.keys();await Promise.all(names.map(name=>caches.delete(name)))}
+  safeStorage.setItem(LEGACY_CACHE_CLEANUP_KEY,'1');
+ }catch(e){console.warn('Legacy cache cleanup failed',e)}
+}
 
 renderSyncUi();
 home();
 initLearningHub();
+clearLegacyAppCachesOnce();
 if(getSyncCode())setTimeout(()=>cloudSync({quiet:true,createIfMissing:true}),800);
 </script>
 </body>
