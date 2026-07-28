@@ -168,7 +168,7 @@ const DEVICE_ID = (()=>{let id=safeStorage.getItem(DEVICE_ID_KEY);if(!id){id=cry
 let state = loadState();
 let session = null;
 let syncTimer=null;
-let syncInFlight=false;
+let syncInFlightPromise=null;
 
 function defaultState(){return {mastered:{},wrongEver:{},attempts:0,history:[],questionState:{},attemptsByDevice:{},resetAt:0,updatedAt:0,activeSession:null};}
 function normalizeState(raw={}){
@@ -211,8 +211,10 @@ async function fetchWithTimeout(url,options={}){
 }
 async function pushCloud(code,current){const res=await fetchWithTimeout(SYNC_ENDPOINT,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,namespace:'toeic',state:current})});if(!res.ok)throw new Error('save_failed');return res.json()}
 async function cloudSync({quiet=false,createIfMissing=false,codeOverride=''}={}){
- const code=normalizeSyncCode(codeOverride||getSyncCode());if(!isValidSyncCode(code)){if(!quiet)setSyncStatus('4~64자의 동기화 코드를 입력하세요.','warn');return false}if(syncInFlight)return false;if(!navigator.onLine){setSyncStatus('오프라인 · 인터넷 연결 후 자동 동기화','warn');return false}
- syncInFlight=true;setSyncStatus('클라우드와 동기화 중…');
+ if(syncInFlightPromise)return syncInFlightPromise;
+ const code=normalizeSyncCode(codeOverride||getSyncCode());if(!isValidSyncCode(code)){if(!quiet)setSyncStatus('4~64자의 동기화 코드를 입력하세요.','warn');return false}if(!navigator.onLine){setSyncStatus('오프라인 · 인터넷 연결 후 자동 동기화','warn');return false}
+ syncInFlightPromise=(async()=>{
+ setSyncStatus('클라우드와 동기화 중…');
  try{
   const res=await fetchWithTimeout(`${SYNC_ENDPOINT}?code=${encodeURIComponent(code)}&namespace=toeic`,{cache:'no-store'});let cloud=null;
   if(res.status===404){if(!createIfMissing){setSyncStatus('해당 동기화 코드를 찾지 못했습니다.','warn');return false}await pushCloud(code,state)}
@@ -220,7 +222,9 @@ async function cloudSync({quiet=false,createIfMissing=false,codeOverride=''}={})
   else{const data=await res.json();cloud=data.state}
   if(cloud){state=mergeStates(state,cloud);localWrite();if(!session&&state.activeSession)home();await pushCloud(code,state)}
   saveSyncCode(code);renderSyncUi();setSyncStatus(`동기화 완료 · ${new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}`,'ok');if(!quiet)toast('진행 상황을 동기화했습니다.');return true
- }catch(e){const timedOut=e?.name==='AbortError';console.warn('Cloud sync failed',e);setSyncStatus(timedOut?'동기화 시간 초과 · 로컬 기록은 안전하게 유지됩니다.':'동기화 실패 · 로컬 기록은 안전하게 유지됩니다.','warn');if(!quiet)toast(timedOut?'연결이 느려 로컬 모드로 계속합니다.':'동기화하지 못해 로컬 모드로 계속합니다.');return false}finally{syncInFlight=false}
+ }catch(e){const timedOut=e?.name==='AbortError';console.warn('Cloud sync failed',e);setSyncStatus(timedOut?'동기화 시간 초과 · 로컬 기록은 안전하게 유지됩니다.':'동기화 실패 · 로컬 기록은 안전하게 유지됩니다.','warn');if(!quiet)toast(timedOut?'연결이 느려 로컬 모드로 계속합니다.':'동기화하지 못해 로컬 모드로 계속합니다.');return false}
+ })();
+ try{return await syncInFlightPromise}finally{syncInFlightPromise=null}
 }
 function persistSession(){if(!session)return;state.activeSession={...session,updatedAt:Date.now()};saveState()}
 function resumeSession(){if(!state.activeSession?.roundIds?.length){toast('이어갈 학습이 없습니다.');return}session={...state.activeSession,answers:{...(state.activeSession.answers||{})},roundIds:[...state.activeSession.roundIds],baseIds:[...(state.activeSession.baseIds||state.activeSession.roundIds)]};closeSide();renderQuestion()}
