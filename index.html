@@ -384,7 +384,7 @@ document.getElementById('openSentenceForestCard').onclick=()=>openSyncedApp(SENT
 document.querySelectorAll('[data-placeholder-title]').forEach(el=>el.onclick=()=>showPlaceholder(el.dataset.placeholderTitle,el.dataset.placeholderIcon));
 document.getElementById('placeholderBackBtn').onclick=showHub;document.getElementById('placeholderHomeBtn').onclick=showHub;
 document.getElementById('externalMenuBtn').onclick=showHub;
-const TRUSTED_STUDY_ORIGINS=new Set([ELECTRICIAN_APP_URL,SENTENCE_FOREST_URL]);
+const TRUSTED_STUDY_ORIGINS=new Set([ELECTRICIAN_APP_URL,SENTENCE_FOREST_URL].map(url=>new URL(url).origin));
 window.addEventListener('message',event=>{
  if(!TRUSTED_STUDY_ORIGINS.has(event.origin)||event.data?.type!=='learning-hub:show-menu')return;
  showHub();
