@@ -61,10 +61,12 @@
 .subject-card .subject-foot span:last-child{display:inline-flex;margin-top:10px;padding:6px 11px;border-radius:999px;background:#eef2ff;color:#4050d7}
 .ready-pill,.soon-pill{right:14px;top:14px;width:9px;height:9px;padding:0;border-radius:50%;font-size:0;box-shadow:0 0 0 5px rgba(18,183,106,.1)}
 .soon-pill{background:#94a3b8;box-shadow:0 0 0 5px rgba(148,163,184,.12)}
-.icon-toeic{background:linear-gradient(145deg,#5267f5 0%,#3447cc 55%,#7a5af8 100%)}
-.icon-electric{background:linear-gradient(145deg,#ffb347 0%,#ff7a45 48%,#e53e73 100%)}
-.icon-forest{background:linear-gradient(145deg,#61c995 0%,#249f72 50%,#16725d 100%)}
-.icon-words{background:linear-gradient(145deg,#b58cff 0%,#7c5ce5 48%,#4454cf 100%)}
+.subject-card .icon-toeic{background:linear-gradient(145deg,#5267f5 0%,#3447cc 55%,#7a5af8 100%)}
+.subject-card .icon-electric{background:linear-gradient(145deg,#ffb347 0%,#ff7a45 48%,#e53e73 100%)}
+.subject-card .icon-forest{background:linear-gradient(145deg,#61c995 0%,#249f72 50%,#16725d 100%)}
+.subject-card .icon-words{background:linear-gradient(145deg,#b58cff 0%,#7c5ce5 48%,#4454cf 100%)}
+.login-mark{overflow:hidden;padding:0;background:transparent;box-shadow:0 14px 35px rgba(68,72,214,.22)}
+.login-mark img{display:block;width:100%;height:100%;object-fit:cover}
 @media(max-width:860px){.subject-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.portal-screen{padding:15px}.portal-top{align-items:center;margin-bottom:20px}.portal-brand h1{font-size:24px}.portal-logo{width:46px;height:46px}.hub-account{padding:8px 10px}.subject-grid{gap:12px}.subject-card{min-height:218px;padding:15px 11px;border-radius:23px}.subject-card .subject-icon{width:74px;height:74px;border-radius:21px;margin:7px 0 13px}.subject-card .subject-icon svg{width:43px;height:43px}.subject-card h3{font-size:18px}.subject-card .subject-foot{font-size:10.5px}.subject-card .subject-foot span:last-child{margin-top:8px}.install-btn{display:none}}
 
@@ -74,7 +76,7 @@
 <section class="portal-screen" id="loginScreen">
   <div class="login-shell">
     <div class="login-card">
-      <div class="login-mark">▦</div>
+      <div class="login-mark"><img src="./app-icon-192.png" alt="" /></div>
       <h1>내 학습 허브</h1>
       <p>동기화 코드 하나로 모든 과목의 학습 기록을 이어갑니다.</p>
       <div class="login-label">학습 동기화 코드</div>
