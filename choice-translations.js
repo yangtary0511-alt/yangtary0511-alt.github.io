@@ -1456,3 +1456,19 @@ window.TOEIC_WORD_TRANSLATIONS = {
   "entering": "입력",
   "checkout": "점검"
 };
+window.TOEIC_PASSAGE_TRANSLATIONS = {
+  "W: Would you be able to fit me in for a quick meeting after lunch? I’d like you to go over my project proposal before I present it to the executive committee tomorrow.\nM: That should work. Could it wait until after 2? A client unexpectedly came to town, and he’s only available to meet me during lunch.\nW: Shall I call your assistant to schedule me in?\nM: That’s OK. Just send your proposal to my work account soon so I can review it before lunch.": "여: 점심 식사 후에 간단한 회의에 저를 초대해 주실 수 있나요? 내일 집행위원회에 제안하기 전에 내 프로젝트 제안을 검토해 주셨으면 합니다.\n남: 그러면 될 것 같아요. 2시 이후까지 기다릴 수 있나요? 의뢰인이 갑자기 마을에 왔는데 점심시간에만 만날 수 있었습니다.\n여: 당신의 조수에게 전화해서 일정을 잡아 드릴까요?\n남: 괜찮아요. 점심 전에 검토할 수 있도록 제안서를 제 업무 계정으로 곧 보내주세요.",
+  "M: Refrigerator sales have been declining, so our company is initiating a new marketing strategy. Today we are going to walk around the manufacturing facility. Be sure to wear the protective glasses that my assistant is passing out while we are on the manufacturing floor.": "남: 냉장고 판매가 감소하고 있어서 우리 회사는 새로운 마케팅 전략을 시작하고 있습니다. 오늘은 제조시설을 둘러보겠습니다. 제조 현장에 있는 동안 조수가 나눠주는 보호 안경을 꼭 착용하세요.",
+  "M: Customers have complained that they cannot reach us through instant messaging because our connection cuts out.\nW: As a web-based business, customers primarily contact us about clothing orders online. ShawCom is known for reliability.\nM: Tellus trumps it in pricing and responsive field service.\nW: Whenever there is a problem, they are on it within hours.": "남: 고객들은 연결이 끊어져서 인스턴트 메시징을 통해 우리에게 연락할 수 없다고 불평했습니다.\n여: 웹 기반 사업체로서 고객은 주로 온라인 의류 주문에 관해 우리에게 연락합니다. ShawCom은 신뢰성으로 유명합니다.\n남: 가격 책정과 신속한 현장 서비스 측면에서 Tellus가 최고입니다.\n여: 문제가 있을 때마다 그들은 몇 시간 내에 그 문제를 해결해 줍니다.",
+  "W: Are you organizing a training session for September 23?\nM1: Yes. Employees need more instruction on the new data-entry system.\nW: Unfortunately, there is also an hour-long marketing meeting that morning.\nM2: Then about a quarter of the staff will be tied up.\nM1: How about shifting the training to the afternoon?": "여: 9월 23일에 훈련 세션을 준비하고 있나요?\nM1: 응. 직원들은 새로운 데이터 입력 시스템에 대해 더 많은 교육이 필요합니다.\n여: 불행하게도 그날 아침에는 한 시간 동안 진행되는 마케팅 회의도 있어요.\nM2: 그러면 직원의 4분의 1 정도가 묶이게 될 거예요.\nM1: 훈련을 오후로 바꾸는 게 어때요?"
+};
+window.TOEIC_SENTENCE_TRANSLATIONS = {
+  "Why will the woman meet with the man?": "여자가 남자를 왜 만나요?",
+  "What does the man say he will do today?": "그 사람은 오늘 무엇을 할 것이라고 말합니까?",
+  "According to the speaker, what is being passed out?": "화자에 따르면, 무엇이 전달되고 있나요?",
+  "Where most likely do the speakers work?": "스피커가 작동할 가능성이 가장 높은 곳은 어디입니까?",
+  "What is an advantage of Tellus?": "텔러스의 장점은 무엇인가요?",
+  "What are the speakers mainly discussing?": "화자들은 주로 무엇을 토론하고 있나요?",
+  "What problem does the woman mention?": "그 여자는 어떤 문제를 언급합니까?",
+  "Why don’t we put in overtime tonight and finish the budget report?": "오늘 밤에는 초과근무를 하고 예산 보고서를 마무리하는 게 어때요?"
+};

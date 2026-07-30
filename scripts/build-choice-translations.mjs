@@ -18,6 +18,8 @@ const words = [...new Set(
     .map((word) => word.toLowerCase().replace(/[’']/g, "'"))
     .filter((word) => !stopWords.has(word)),
 )];
+const missingPassages = [...new Set(questions.filter((q) => q.passage && !q.passageTranslation).map((q) => q.passage))];
+const missingSentences = [...new Set(questions.filter((q) => !q.sentenceTranslation).map((q) => q.question))];
 
 async function translateAll(items) {
   const translations = {};
@@ -39,9 +41,11 @@ async function translateAll(items) {
 
 const ordered = await translateAll(choices);
 const wordTranslations = await translateAll(words);
+const passageTranslations = await translateAll(missingPassages);
+const sentenceTranslations = await translateAll(missingSentences);
 await fs.writeFile(
   new URL("../choice-translations.js", import.meta.url),
-  `window.CHOICE_TRANSLATIONS = ${JSON.stringify(ordered, null, 2)};\nwindow.TOEIC_WORD_TRANSLATIONS = ${JSON.stringify(wordTranslations, null, 2)};\n`,
+  `window.CHOICE_TRANSLATIONS = ${JSON.stringify(ordered, null, 2)};\nwindow.TOEIC_WORD_TRANSLATIONS = ${JSON.stringify(wordTranslations, null, 2)};\nwindow.TOEIC_PASSAGE_TRANSLATIONS = ${JSON.stringify(passageTranslations, null, 2)};\nwindow.TOEIC_SENTENCE_TRANSLATIONS = ${JSON.stringify(sentenceTranslations, null, 2)};\n`,
   "utf8",
 );
-console.log(`Wrote ${choices.length} choice translations and ${words.length} vocabulary entries.`);
+console.log(`Wrote ${choices.length} choices, ${words.length} vocabulary entries, ${missingPassages.length} passages, and ${missingSentences.length} sentences.`);
