@@ -1,4 +1,4 @@
-const CACHE_NAME = "learning-hub-shell-v14";
+const CACHE_NAME = "learning-hub-shell-v15";
 const CORE_ASSETS = [
   "/",
   "/index.html",
@@ -8,6 +8,7 @@ const CORE_ASSETS = [
   "/learning-hub-icon-v5-256.png",
   "/learning-hub-icon-v5-512.png",
   "/additional-questions.js",
+  "/choice-translations.js",
   "/학습허브-설치.zip"
 ];
 
