@@ -11,7 +11,7 @@
   "launch_handler": {
     "client_mode": "navigate-existing"
   },
-  "orientation": "any",
+  "orientation": "portrait-primary",
   "background_color": "#f4f6f9",
   "theme_color": "#4050d7",
   "icons": [
@@ -32,6 +32,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/learning-hub-icon-v5-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
