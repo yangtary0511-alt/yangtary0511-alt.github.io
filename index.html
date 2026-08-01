@@ -401,12 +401,20 @@ function fallbackWordExample(item){
  const word=String(item.word||'').trim(),lower=word.toLowerCase(),meaning=String(item.meaning||'').trim();
  if(/ly$/.test(lower))return {en:`The team completed the task ${word}.`,ko:`팀은 그 업무를 ${meaning} 완료했습니다.`};
  if(/^(be |have |make |take |give |keep |provide |arrange |review |submit |confirm |notify |discuss |improve |reduce |increase |attend |apply |contact |request |require |deliver |purchase |schedule |manage |prepare |consider |expect |allow |offer |receive |visit |check |use |work |travel |send |write |subscribe)/.test(lower))return {en:`The staff will ${word} before the meeting.`,ko:`직원들은 회의 전에 ${meaning} 것입니다.`};
- return {en:`The manager mentioned ${word} during the meeting.`,ko:`관리자는 회의 중에 ${word}(${meaning})을 언급했습니다.`}
+ return {en:`The manager discussed the ${word} during the meeting.`,ko:'관리자는 회의 중에 해당 내용을 논의했습니다.'}
+}
+function exampleContainsWord(text,word){
+ const hay=String(text||'').toLowerCase().replace(/[’]/g,"'"),needle=wordKey(word);if(!needle)return false;
+ return new RegExp(`(^|[^a-z])${needle.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}([^a-z]|$)`,'i').test(hay)
+}
+function cleanExampleTranslation(text,item){
+ const raw=String(text||'').trim(),word=String(item.word||'').trim();if(!raw||!word)return raw;
+ return raw.replace(new RegExp(`${word.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\s*\\([^)]*\\)`,'gi'),String(item.meaning||'').trim())
 }
 function findWordExample(item){
- if(item.example&&!/-{3,}\d*\.?-{0,3}|_{3,}/.test(String(item.example)))return {en:String(item.example).trim(),ko:item.exampleKo||''};
- const key=wordKey(item.word),matches=QUESTIONS.filter(question=>`${question.question} ${question.passage||''}`.toLowerCase().includes(key)),q=matches.find(question=>!/^(?:\d+\.\s*)?choose the best/i.test(question.question||''))||matches[0];
- const example=questionExample(q,key);return example.en?example:fallbackWordExample(item)
+ if(item.example&&!/-{3,}\d*\.?-{0,3}|_{3,}/.test(String(item.example))&&exampleContainsWord(item.example,item.word))return {en:String(item.example).trim(),ko:cleanExampleTranslation(item.exampleKo,item)};
+ const matches=QUESTIONS.filter(question=>exampleContainsWord(`${question.question} ${question.passage||''}`,item.word)),q=matches.find(question=>!/^(?:\d+\.\s*)?choose the best/i.test(question.question||''))||matches[0];
+ const example=questionExample(q,wordKey(item.word));return exampleContainsWord(example.en,item.word)?{en:example.en,ko:cleanExampleTranslation(example.ko,item)}:fallbackWordExample(item)
 }
 function addQuestionVocabularyToWords(q,source='TOEIC 오답'){
  const text=`${q.question} ${q.passage||''}`.toLowerCase().replace(/[’]/g,"'"),now=Date.now(),existing=new Set(getAllWordBank().map(item=>wordKey(item.word)));let added=0;
