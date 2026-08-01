@@ -502,6 +502,8 @@ function renderWordsHome(){
  root.querySelectorAll('[data-word-stage]').forEach(btn=>btn.onclick=()=>startWordStage(Number(btn.dataset.wordStage)));
 }
 function startWordStage(stage){
+ const saved=state.wordStudy.activeSession;
+ if(saved?.ids?.length&&Number(saved.stage)===Number(stage)){renderWordStudy(saved);return}
  const bank=getAllWordBank(),range=wordStageRanges(bank.length)[stage-1],ids=range?bank.slice(range.start,Math.min(range.end,bank.length)).map(x=>x.id):[];
  if(!ids.length){toast('학습할 단어가 없습니다.');return}
  const active={stage,ids:shuffle(ids),index:0,wrongIds:[],round:1,revealed:false};persistWordSession(active);renderWordStudy(active)
@@ -526,7 +528,9 @@ function answerWord(active,result){
  const id=active.ids[active.index],now=Date.now();state.wordStudy.wordState[id]={status:result,stage:active.stage,updatedAt:now};
  if(result==='wrong'&&!active.wrongIds.includes(id))active.wrongIds.push(id);
  active.index++;active.revealed=false;
- if(active.index>=active.ids.length)finishWordRound(active);else{persistWordSession(active);renderWordStudy(active)}
+ persistWordSession(active);
+ if(getSyncCode())scheduleCloudSync(0);
+ if(active.index>=active.ids.length)finishWordRound(active);else renderWordStudy(active)
 }
 function finishWordRound(active){
  const wrong=[...active.wrongIds],root=document.getElementById('wordsAppRoot');
