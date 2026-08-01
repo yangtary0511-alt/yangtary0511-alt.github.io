@@ -91,6 +91,7 @@
 .external-menu-button{position:fixed;left:18px;bottom:18px;z-index:1000;border:1px solid rgba(36,71,216,.2);border-radius:999px;padding:11px 16px;background:rgba(255,255,255,.96);color:#172033;box-shadow:0 10px 30px rgba(23,32,51,.18);font:800 13px/1.2 Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer;backdrop-filter:blur(12px)}
 @media(max-width:520px){.external-menu-button{left:12px;bottom:calc(12px + env(safe-area-inset-bottom));padding:10px 13px}}
 
+.word-example-ko.hidden-example-ko{visibility:hidden}
 </style>
 </head>
 <body>
@@ -461,8 +462,13 @@ function cleanExampleTranslation(text,item){
 function knownExampleTranslation(en,item){
  const direct=window.TOEIC_SENTENCE_TRANSLATIONS?.[en]||window.CHOICE_TRANSLATIONS?.[en];
  if(direct)return cleanExampleTranslation(direct,item);
- const q=QUESTIONS.find(question=>completedQuestionText(question,question.question)===en);
- return cleanExampleTranslation(q?.sentenceTranslation,item)
+ const normalized=text=>String(text||'').replace(/\s+/g,' ').trim(),target=normalized(en);
+ for(const q of QUESTIONS){
+  if(normalized(completedQuestionText(q,q.question))===target)return cleanExampleTranslation(q.sentenceTranslation,item);
+  const source=String(q.passage||'').split(/\n|(?<=[.!?])\s+/).map(normalized).filter(Boolean),translated=String(q.passageTranslation||'').split(/\n|(?<=[.!?])\s+/).map(normalized).filter(Boolean),index=source.indexOf(target);
+  if(index>=0&&translated[index])return cleanExampleTranslation(translated[index],item)
+ }
+ return ''
 }
 function findWordExample(item){
  if(item.example&&!/-{3,}\d*\.?-{0,3}|_{3,}/.test(String(item.example))&&exampleContainsWord(item.example,item.word))return {en:String(item.example).trim(),ko:cleanExampleTranslation(item.exampleKo,item)};
@@ -565,7 +571,7 @@ function renderWordStudy(active,autoSpeak=true){
  const root=document.getElementById('wordsAppRoot');if(!active?.ids?.length){renderWordsHome();return}
  const item=getWordById(active.ids[active.index]);if(!item){active.index++;if(active.index>=active.ids.length){finishWordRound(active);return}persistWordSession(active);renderWordStudy(active);return}
  const pct=Math.round((active.index/active.ids.length)*100),example=findWordExample(item);
- root.innerHTML=`<div class="words-study"><div class="words-study-head"><button class="portal-link-btn" id="wordsBackBtn">☰ 스테이지</button><b>Stage ${active.stage} · ${active.round}회독</b><span class="words-progress">${active.index+1}/${active.ids.length}</span></div><div class="word-progress-track"><div class="word-progress-bar" style="width:${pct}%"></div></div><div class="word-card"><div class="word-audio-panel"><label class="word-audio-field">영어 발음<select class="word-voice-select" id="wordVoiceSelect"><option>영어 발음 불러오는 중…</option></select></label><label class="word-audio-field">발음 빠르기<div class="word-rate-row"><input class="word-rate-slider" id="wordRateSlider" type="range" min="0.5" max="1.5" step="0.01" value="${Number(state.wordStudy.speechRate)||.82}"><span class="word-rate-value" id="wordRateValue">${(Number(state.wordStudy.speechRate)||.82).toFixed(2)}×</span></div></label></div><div class="word-source">${escapeHtml(item.source)}</div><div class="word-main">${escapeHtml(item.word)}</div><div class="word-meaning ${active.revealed?'':'hidden-meaning'}">${escapeHtml(item.meaning)}</div><div class="word-example">${escapeHtml(example.en)}${example.ko?`<span class="word-example-ko">${escapeHtml(example.ko)}</span>`:''}</div><div class="word-audio-controls"><button class="word-audio-btn" id="replayWordBtn">🔊 다시 듣기</button><button class="word-audio-btn ${state.wordStudy.autoSpeak!==false?'active':''}" id="autoSpeakBtn">자동 발음 ${state.wordStudy.autoSpeak!==false?'켜짐':'꺼짐'}</button></div><div class="word-actions"><button class="word-btn reveal" id="revealWordBtn">${active.revealed?'뜻 숨기기':'뜻 보기'}</button><button class="word-btn study" data-word-answer="wrong">? 공부하겠음</button><button class="word-btn" data-word-answer="known">✓ 알고있음</button></div></div></div>`;
+ root.innerHTML=`<div class="words-study"><div class="words-study-head"><button class="portal-link-btn" id="wordsBackBtn">☰ 스테이지</button><b>Stage ${active.stage} · ${active.round}회독</b><span class="words-progress">${active.index+1}/${active.ids.length}</span></div><div class="word-progress-track"><div class="word-progress-bar" style="width:${pct}%"></div></div><div class="word-card"><div class="word-audio-panel"><label class="word-audio-field">영어 발음<select class="word-voice-select" id="wordVoiceSelect"><option>영어 발음 불러오는 중…</option></select></label><label class="word-audio-field">발음 빠르기<div class="word-rate-row"><input class="word-rate-slider" id="wordRateSlider" type="range" min="0.5" max="1.5" step="0.01" value="${Number(state.wordStudy.speechRate)||.82}"><span class="word-rate-value" id="wordRateValue">${(Number(state.wordStudy.speechRate)||.82).toFixed(2)}×</span></div></label></div><div class="word-source">${escapeHtml(item.source)}</div><div class="word-main">${escapeHtml(item.word)}</div><div class="word-meaning ${active.revealed?'':'hidden-meaning'}">${escapeHtml(item.meaning)}</div><div class="word-example">${escapeHtml(example.en)}${example.ko?`<span class="word-example-ko ${active.revealed?'':'hidden-example-ko'}">${escapeHtml(example.ko)}</span>`:''}</div><div class="word-audio-controls"><button class="word-audio-btn" id="replayWordBtn">🔊 다시 듣기</button><button class="word-audio-btn ${state.wordStudy.autoSpeak!==false?'active':''}" id="autoSpeakBtn">자동 발음 ${state.wordStudy.autoSpeak!==false?'켜짐':'꺼짐'}</button></div><div class="word-actions"><button class="word-btn reveal" id="revealWordBtn">${active.revealed?'뜻 숨기기':'뜻 보기'}</button><button class="word-btn study" data-word-answer="wrong">? 공부하겠음</button><button class="word-btn" data-word-answer="known">✓ 알고있음</button></div></div></div>`;
  populateWordVoices();if('speechSynthesis' in window)window.speechSynthesis.onvoiceschanged=populateWordVoices;
  document.getElementById('wordsBackBtn').onclick=()=>{stopWordSpeech();persistWordSession(active);renderWordsHome()};
  document.getElementById('replayWordBtn').onclick=()=>speakWordCard(item,example);
