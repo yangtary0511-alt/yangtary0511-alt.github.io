@@ -469,15 +469,21 @@ function wordStageRanges(total){
 }
 function speakWordCard(item,example){
  if(!('speechSynthesis' in window)){toast('이 기기에서는 영어 음성 재생을 지원하지 않습니다.');return}
- window.speechSynthesis.cancel();const parts=[item.word,example.en].filter(Boolean),voices=window.speechSynthesis.getVoices(),voice=voices.find(v=>v.voiceURI===state.wordStudy.voiceURI)||voices.find(v=>/^en[-_]/i.test(v.lang)),rate=Math.max(.5,Math.min(1.5,Number(state.wordStudy.speechRate)||.82));
- for(const text of parts){const utterance=new SpeechSynthesisUtterance(text);utterance.lang=voice?.lang||'en-US';utterance.rate=rate;utterance.pitch=1;if(voice)utterance.voice=voice;window.speechSynthesis.speak(utterance)}
+ window.speechSynthesis.cancel();const parts=[item.word,example.en].filter(Boolean),voices=window.speechSynthesis.getVoices(),accent=normaliseWordAccent(voices),voice=voices.find(v=>v.lang.replace('_','-').toLowerCase()===accent.toLowerCase())||voices.find(v=>v.lang.replace('_','-').toLowerCase().startsWith(accent.toLowerCase()))||voices.find(v=>/^en[-_]/i.test(v.lang)),rate=Math.max(.5,Math.min(1.5,Number(state.wordStudy.speechRate)||.82));
+ for(const text of parts){const utterance=new SpeechSynthesisUtterance(text);utterance.lang=voice?.lang||accent;utterance.rate=rate;utterance.pitch=1;if(voice)utterance.voice=voice;window.speechSynthesis.speak(utterance)}
 }
 function stopWordSpeech(){if('speechSynthesis' in window)window.speechSynthesis.cancel()}
+function normaliseWordAccent(voices=[]){
+ const allowed=['en-US','en-GB','en-AU'],saved=state.wordStudy.voiceURI;
+ if(allowed.includes(saved))return saved;
+ const previous=voices.find(v=>v.voiceURI===saved),lang=previous?.lang?.replace('_','-').toLowerCase();
+ const migrated=allowed.find(code=>code.toLowerCase()===lang)||'en-US';state.wordStudy.voiceURI=migrated;return migrated
+}
 function populateWordVoices(){
  const select=document.getElementById('wordVoiceSelect');if(!select||!('speechSynthesis' in window))return;
- const voices=window.speechSynthesis.getVoices().filter(v=>/^en[-_]/i.test(v.lang)),selected=state.wordStudy.voiceURI;
- select.innerHTML=`<option value="">기기 기본 영어 발음</option>${voices.map(v=>`<option value="${escapeHtml(v.voiceURI)}">${escapeHtml(v.name)} · ${escapeHtml(v.lang)}</option>`).join('')}`;
- if(voices.some(v=>v.voiceURI===selected))select.value=selected;
+ const selected=normaliseWordAccent(window.speechSynthesis.getVoices());
+ select.innerHTML='<option value="en-US">미국식 발음</option><option value="en-GB">영국식 발음</option><option value="en-AU">호주식 발음</option>';
+ select.value=selected;
 }
 function persistWordSession(active){state.wordStudy.activeSession=active?{...active,updatedAt:Date.now()}:null;state.wordStudy.updatedAt=Date.now();saveState()}
 function renderWordsHome(){
