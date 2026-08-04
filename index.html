@@ -361,7 +361,7 @@ function choiceTranslation(q,index){
  return direct||window.CHOICE_TRANSLATIONS?.[q.choices[index]]||'문맥에 맞는 뜻을 확인하세요.';
 }
 function choiceMeanings(q){
- return `<div class="choice-meanings"><b>모든 선택지 해석</b>${q.choices.map((choice,index)=>`<div class="choice-meaning"><strong>${letters[index]}</strong><div>${escapeHtml(choice)}<br><span>${escapeHtml(choiceTranslation(q,index))}</span></div></div>`).join('')}</div>`;
+ return `<div class="choice-meanings"><b>모든 선택지 해석</b>${q.choices.map((choice,index)=>`<div class="choice-meaning"><strong>${letters[index]}</strong><div>${interactiveChoiceEnglish(q,index)}<br><span>${escapeHtml(choiceTranslation(q,index))}</span></div></div>`).join('')}</div>`;
 }
 function vocabularyFeedback(q){
  const source=`${q.question} ${q.passage||''}`.toLowerCase().replace(/[’']/g,"'");
@@ -521,15 +521,22 @@ function interactiveFeedbackEnglish(text,questionId=''){
  while((match=pattern.exec(raw))){const meaning=feedbackTermMeaning(match[0]);html+=escapeHtml(raw.slice(last,match.index));html+=meaning?`<span class="feedback-token" data-vocab-term="${escapeHtml(match[0])}" data-question-id="${escapeHtml(questionId)}" data-meaning="${escapeHtml(meaning)}" title="${escapeHtml(meaning)}">${escapeHtml(match[0])}</span>`:escapeHtml(match[0]);last=pattern.lastIndex}
  return html+escapeHtml(raw.slice(last))
 }
-function addManualFeedbackTerm(term,q,source='TOEIC 피드백'){
+function interactiveChoiceEnglish(q,index){
+ const choice=String(q?.choices?.[index]||''),html=interactiveFeedbackEnglish(choice,q?.id||'');
+ if(html.includes('feedback-token')||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent))return html;
+ const words=choice.match(/[A-Za-z][A-Za-z’'-]*/g)||[],meaning=choiceTranslation(q,index);
+ if(!words.length||words.length>4||!meaning)return html;
+ return `<span class="feedback-token" data-vocab-term="${escapeHtml(choice)}" data-question-id="${escapeHtml(q?.id||'')}" data-meaning="${escapeHtml(meaning)}" data-meaning-hint="${escapeHtml(meaning)}" title="${escapeHtml(meaning)}">${escapeHtml(choice)}</span>`
+}
+function addManualFeedbackTerm(term,q,source='TOEIC 피드백',meaningHint=''){
  const clean=String(term||'').replace(/[’]/g,"'").trim(),key=wordKey(clean);if(!key)return;
  const existing=getAllWordBank().find(item=>wordKey(item.word)===key),example=questionExample(q,key),now=Date.now();
  if(existing){state.wordStudy.exampleOverrides[key]={en:example.en,ko:example.ko,source,updatedAt:now};state.wordStudy.updatedAt=now;saveState();toast(`“${clean}”의 토익 예문을 단어 카드에 저장했습니다.`);return}
- const meaning=feedbackTermMeaning(key);if(!meaning){toast('뜻이 확인된 단어만 카드에 추가할 수 있습니다.');return}const id=`dynamic:${key}`;
+ const meaning=feedbackTermMeaning(key)||String(meaningHint||'').trim();if(!meaning){toast('뜻이 확인된 단어만 카드에 추가할 수 있습니다.');return}const id=`dynamic:${key}`;
  state.wordStudy.dynamicWords[id]={word:clean,meaning,source,example:example.en||String(q?.question||q?.prompt||''),exampleKo:example.ko||'',addedAt:now,updatedAt:now};state.wordStudy.updatedAt=now;saveState();toast(`“${clean}”을 단어 카드 끝에 추가했습니다.`)
 }
 function bindFeedbackVocabulary(container=document){
- container.querySelectorAll('[data-vocab-term]').forEach(token=>token.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();addManualFeedbackTerm(token.dataset.vocabTerm,qById(token.dataset.questionId),'TOEIC 피드백 선택')}))
+ container.querySelectorAll('[data-vocab-term]').forEach(token=>token.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();addManualFeedbackTerm(token.dataset.vocabTerm,qById(token.dataset.questionId),'TOEIC 피드백 선택',token.dataset.meaningHint||token.dataset.meaning||'')}))
 }
 async function syncSentenceForestWrongWords(){
  const code=getSyncCode();if(!isValidSyncCode(code)||!navigator.onLine)return 0;
@@ -631,7 +638,7 @@ function renderQuestion(){
      else if(isWrong&&i===q.answer) cls+=' correct-choice';
      else if(!isWrong&&i===chosen) cls+=' correct-choice';
    }
-   return `<div class="${cls}" data-i="${i}"><span class="letter">${letters[i]}</span><span class="choice-copy"><span class="choice-text">${answered?interactiveFeedbackEnglish(c,q.id):escapeHtml(c)}</span>${answered?`<span class="choice-ko">${escapeHtml(choiceTranslation(q,i))}</span>`:''}</span></div>`;
+   return `<div class="${cls}" data-i="${i}"><span class="letter">${letters[i]}</span><span class="choice-copy"><span class="choice-text">${answered?interactiveChoiceEnglish(q,i):escapeHtml(c)}</span>${answered?`<span class="choice-ko">${escapeHtml(choiceTranslation(q,i))}</span>`:''}</span></div>`;
  }).join('')}</div>${answered?`<section class="instant-feedback ${isWrong?'':'correct-feedback'}"><h3>${isWrong?'오답입니다.':'정답입니다.'}</h3>${isWrong?`<div class="answer-row wrong">내 답: ${letters[chosen]}. ${interactiveFeedbackEnglish(q.choices[chosen],q.id)}</div>`:''}<div class="correct-answer">정답: ${letters[q.answer]}. ${interactiveFeedbackEnglish(q.choices[q.answer],q.id)}</div><div class="qmeta"><span class="chip">핵심 유형: ${escapeHtml(q.skill)}</span></div><div class="additional-feedback"><h4>상세 피드백</h4>${detailedFeedback(q,chosen,false)}</div></section>`:''}<div class="jumpgrid">${session.roundIds.map((id,i)=>`<button class="jump ${Object.prototype.hasOwnProperty.call(session.answers,id)?'answered':''} ${i===session.index?'current':''}" data-j="${i}">${i+1}</button>`).join('')}</div><div class="nav"><button class="btn secondary" id="prevBtn" ${session.index===0?'disabled':''}>이전</button><button class="btn secondary" id="nextBtn" ${session.index===session.roundIds.length-1?'disabled':''}>다음</button><button class="btn primary" id="submitBtn">회차 제출</button></div>`;
  if(answered)bindFeedbackVocabulary(document.getElementById('main'));
  document.querySelectorAll('.choice').forEach(el=>el.onclick=()=>{
