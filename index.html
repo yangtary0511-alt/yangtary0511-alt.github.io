@@ -92,6 +92,11 @@
 @media(max-width:520px){.external-menu-button{left:12px;bottom:calc(12px + env(safe-area-inset-bottom));padding:10px 13px}}
 
 .word-example-ko.hidden-example-ko{visibility:hidden}
+.instant-feedback.correct-feedback{border-color:#b7dfc5;background:var(--okbg)}
+.instant-feedback.correct-feedback h3{color:var(--ok)}
+.instant-feedback.correct-feedback .reason-grid{grid-template-columns:1fr 1fr}
+.confusion-reason{border-color:#dbe2ef;background:#f8fafc}
+@media(max-width:650px){.instant-feedback.correct-feedback .reason-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -369,9 +374,12 @@ function vocabularyFeedback(q){
  return items.length?`<div class="vocab-box"><b>문제 핵심 단어</b><div class="vocab-list">${items.map(([word,meaning])=>`<span class="vocab-item"><strong>${escapeHtml(word)}</strong> <span>${escapeHtml(meaning)}</span></span>`).join('')}</div></div>`:'';
 }
 function detailedFeedback(q,chosen,includeChoices=true){
- const wrongKo=choiceTranslation(q,chosen),correctKo=choiceTranslation(q,q.answer);
- const wrongReason=`${letters[chosen]}번은 ‘${wrongKo}’라는 뜻이지만, 이 문제의 핵심인 ${q.skill} 조건과 앞뒤 문맥을 충족하지 못합니다.`;
+ const correctKo=choiceTranslation(q,q.answer),isCorrect=chosen===q.answer;
  const correctReason=`${letters[q.answer]}번은 ‘${correctKo}’라는 뜻입니다. ${q.explanation||`빈칸의 ${q.skill} 조건을 만족하고 앞뒤 문맥도 자연스럽게 이어 줍니다.`} 따라서 문장 구조와 의미를 모두 충족하는 정답은 ${letters[q.answer]}번입니다.`;
+ const otherChoices=q.choices.map((_,index)=>index).filter(index=>index!==q.answer);
+ const confusion=`${q.skill} 문제에서는 뜻만 비슷한 보기에 끌리지 말고 문장 구조와 앞뒤 연결을 함께 봐야 합니다. ${otherChoices.map(index=>`${letters[index]} ‘${choiceTranslation(q,index)}’`).join(', ')}은 이 문맥의 조건을 완전히 만족하지 않습니다.`;
+ if(isCorrect)return `${includeChoices?choiceMeanings(q):''}<div class="reason-grid"><div class="reason-box correct-reason"><b>정답이 맞는 이유</b>${escapeHtml(correctReason)}</div><div class="reason-box confusion-reason"><b>헷갈리기 쉬운 부분</b>${escapeHtml(confusion)}</div></div>${vocabularyFeedback(q)}`;
+ const wrongKo=choiceTranslation(q,chosen),wrongReason=`${letters[chosen]}번은 ‘${wrongKo}’라는 뜻이지만, 이 문제의 핵심인 ${q.skill} 조건과 앞뒤 문맥을 충족하지 못합니다.`;
  return `${includeChoices?choiceMeanings(q):''}<div class="reason-grid"><div class="reason-box"><b>내 선택이 틀린 이유</b>${escapeHtml(wrongReason)}</div><div class="reason-box correct-reason"><b>정답이 맞는 이유</b>${escapeHtml(correctReason)}</div></div>${vocabularyFeedback(q)}`;
 }
 
@@ -608,7 +616,7 @@ function renderQuestion(){
  const chosen=answered?session.answers[q.id]:null;
  const isWrong=answered&&chosen!==q.answer;
  const progress=((session.index+1)/session.roundIds.length)*100;
- document.getElementById('main').innerHTML=`<div class="statusline"><span>회차 ${session.round} · ${session.index+1}/${session.roundIds.length}</span><span>${Object.keys(session.answers).length}개 응답</span></div><div class="progress"><div class="bar" style="width:${progress}%"></div></div><div class="qmeta"><span class="chip">${escapeHtml(q.kind)}</span><span class="chip">${escapeHtml(q.part)}</span><span class="chip">${escapeHtml(q.date)}</span></div>${q.passage?`<div class="passage">${isWrong?interactiveFeedbackEnglish(q.passage,q.id):escapeHtml(q.passage)}</div>${isWrong?passageTranslationBlock(q):''}`:''}<div class="question">${isWrong?interactiveFeedbackEnglish(q.question,q.id):escapeHtml(q.question)}</div>${isWrong?sentenceTranslationBlock(q):''}<div class="choices">${q.choices.map((c,i)=>{
+ document.getElementById('main').innerHTML=`<div class="statusline"><span>회차 ${session.round} · ${session.index+1}/${session.roundIds.length}</span><span>${Object.keys(session.answers).length}개 응답</span></div><div class="progress"><div class="bar" style="width:${progress}%"></div></div><div class="qmeta"><span class="chip">${escapeHtml(q.kind)}</span><span class="chip">${escapeHtml(q.part)}</span><span class="chip">${escapeHtml(q.date)}</span></div>${q.passage?`<div class="passage">${answered?interactiveFeedbackEnglish(q.passage,q.id):escapeHtml(q.passage)}</div>${answered?passageTranslationBlock(q):''}`:''}<div class="question">${answered?interactiveFeedbackEnglish(q.question,q.id):escapeHtml(q.question)}</div>${answered?sentenceTranslationBlock(q):''}<div class="choices">${q.choices.map((c,i)=>{
    let cls='choice';
    if(answered){
      cls+=' locked';
@@ -616,9 +624,9 @@ function renderQuestion(){
      else if(isWrong&&i===q.answer) cls+=' correct-choice';
      else if(!isWrong&&i===chosen) cls+=' correct-choice';
    }
-   return `<div class="${cls}" data-i="${i}"><span class="letter">${letters[i]}</span><span class="choice-copy"><span class="choice-text">${isWrong?interactiveFeedbackEnglish(c,q.id):escapeHtml(c)}</span>${isWrong?`<span class="choice-ko">${escapeHtml(choiceTranslation(q,i))}</span>`:''}</span></div>`;
- }).join('')}</div>${isWrong?`<section class="instant-feedback"><h3>오답입니다.</h3><div class="answer-row wrong">내 답: ${letters[chosen]}. ${interactiveFeedbackEnglish(q.choices[chosen],q.id)}</div><div class="correct-answer">정답: ${letters[q.answer]}. ${interactiveFeedbackEnglish(q.choices[q.answer],q.id)}</div><div class="qmeta"><span class="chip">핵심 유형: ${escapeHtml(q.skill)}</span></div><div class="additional-feedback"><h4>상세 피드백</h4>${detailedFeedback(q,chosen,false)}</div></section>`:''}<div class="jumpgrid">${session.roundIds.map((id,i)=>`<button class="jump ${Object.prototype.hasOwnProperty.call(session.answers,id)?'answered':''} ${i===session.index?'current':''}" data-j="${i}">${i+1}</button>`).join('')}</div><div class="nav"><button class="btn secondary" id="prevBtn" ${session.index===0?'disabled':''}>이전</button><button class="btn secondary" id="nextBtn" ${session.index===session.roundIds.length-1?'disabled':''}>다음</button><button class="btn primary" id="submitBtn">회차 제출</button></div>`;
- if(isWrong)bindFeedbackVocabulary(document.getElementById('main'));
+   return `<div class="${cls}" data-i="${i}"><span class="letter">${letters[i]}</span><span class="choice-copy"><span class="choice-text">${answered?interactiveFeedbackEnglish(c,q.id):escapeHtml(c)}</span>${answered?`<span class="choice-ko">${escapeHtml(choiceTranslation(q,i))}</span>`:''}</span></div>`;
+ }).join('')}</div>${answered?`<section class="instant-feedback ${isWrong?'':'correct-feedback'}"><h3>${isWrong?'오답입니다.':'정답입니다.'}</h3>${isWrong?`<div class="answer-row wrong">내 답: ${letters[chosen]}. ${interactiveFeedbackEnglish(q.choices[chosen],q.id)}</div>`:''}<div class="correct-answer">정답: ${letters[q.answer]}. ${interactiveFeedbackEnglish(q.choices[q.answer],q.id)}</div><div class="qmeta"><span class="chip">핵심 유형: ${escapeHtml(q.skill)}</span></div><div class="additional-feedback"><h4>상세 피드백</h4>${detailedFeedback(q,chosen,false)}</div></section>`:''}<div class="jumpgrid">${session.roundIds.map((id,i)=>`<button class="jump ${Object.prototype.hasOwnProperty.call(session.answers,id)?'answered':''} ${i===session.index?'current':''}" data-j="${i}">${i+1}</button>`).join('')}</div><div class="nav"><button class="btn secondary" id="prevBtn" ${session.index===0?'disabled':''}>이전</button><button class="btn secondary" id="nextBtn" ${session.index===session.roundIds.length-1?'disabled':''}>다음</button><button class="btn primary" id="submitBtn">회차 제출</button></div>`;
+ if(answered)bindFeedbackVocabulary(document.getElementById('main'));
  document.querySelectorAll('.choice').forEach(el=>el.onclick=()=>{
    if(Object.prototype.hasOwnProperty.call(session.answers,q.id)) return;
    session.answers[q.id]=Number(el.dataset.i);persistSession();
