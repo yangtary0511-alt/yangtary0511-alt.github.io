@@ -522,11 +522,11 @@ function interactiveFeedbackEnglish(text,questionId=''){
  return html+escapeHtml(raw.slice(last))
 }
 function interactiveChoiceEnglish(q,index){
- const choice=String(q?.choices?.[index]||''),html=interactiveFeedbackEnglish(choice,q?.id||'');
- if(html.includes('feedback-token')||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent))return html;
+ const choice=String(q?.choices?.[index]||'');
+ if(/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent))return escapeHtml(choice);
  const words=choice.match(/[A-Za-z][A-Za-z’'-]*/g)||[],meaning=choiceTranslation(q,index);
- if(!words.length||words.length>4||!meaning)return html;
- return `<span class="feedback-token" data-vocab-term="${escapeHtml(choice)}" data-question-id="${escapeHtml(q?.id||'')}" data-meaning="${escapeHtml(meaning)}" data-meaning-hint="${escapeHtml(meaning)}" title="${escapeHtml(meaning)}">${escapeHtml(choice)}</span>`
+ if(words.length&&words.length<=4&&meaning)return `<span class="feedback-token" data-vocab-term="${escapeHtml(choice)}" data-question-id="${escapeHtml(q?.id||'')}" data-meaning="${escapeHtml(meaning)}" data-meaning-hint="${escapeHtml(meaning)}" title="${escapeHtml(meaning)}">${escapeHtml(choice)}</span>`;
+ return interactiveFeedbackEnglish(choice,q?.id||'')
 }
 function addManualFeedbackTerm(term,q,source='TOEIC 피드백',meaningHint=''){
  const clean=String(term||'').replace(/[’]/g,"'").trim(),key=wordKey(clean);if(!key)return;
