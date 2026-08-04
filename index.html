@@ -253,11 +253,12 @@ let state = loadState();
 let session = null;
 let syncTimer=null;
 let syncInFlightPromise=null;
+const feedbackMeaningRequests={};
 
-function defaultWordStudy(){return {completedStages:{},stageCompletionState:{},wordState:{},dynamicWords:{},exampleOverrides:{},activeSession:null,autoSpeak:true,voiceURI:'',speechRate:.82,updatedAt:0}}
+function defaultWordStudy(){return {completedStages:{},stageCompletionState:{},wordState:{},dynamicWords:{},exampleOverrides:{},lookupMeanings:{},activeSession:null,autoSpeak:true,voiceURI:'',speechRate:.82,updatedAt:0}}
 function normalizeWordStudy(raw={}){
  const out={...defaultWordStudy(),...(raw||{})};
- out.completedStages={...(out.completedStages||{})};out.stageCompletionState={...(out.stageCompletionState||{})};out.wordState={...(out.wordState||{})};out.dynamicWords={...(out.dynamicWords||{})};out.exampleOverrides={...(out.exampleOverrides||{})};
+ out.completedStages={...(out.completedStages||{})};out.stageCompletionState={...(out.stageCompletionState||{})};out.wordState={...(out.wordState||{})};out.dynamicWords={...(out.dynamicWords||{})};out.exampleOverrides={...(out.exampleOverrides||{})};out.lookupMeanings={...(out.lookupMeanings||{})};
  if(out.activeSession){const wrongIds=Array.isArray(out.activeSession.wrongIds)?out.activeSession.wrongIds:[];out.activeSession={...out.activeSession,ids:Array.isArray(out.activeSession.ids)?out.activeSession.ids:[],wrongIds,pendingIds:Array.isArray(out.activeSession.pendingIds)?out.activeSession.pendingIds:[...wrongIds]}}
  return out
 }
@@ -295,6 +296,7 @@ function mergeWordStudies(a,b){
  for(const id of new Set([...Object.keys(a.wordState),...Object.keys(b.wordState)])){const x=a.wordState[id],y=b.wordState[id];out.wordState[id]=!x?y:!y?x:(Number(x.updatedAt)||0)>=(Number(y.updatedAt)||0)?x:y}
  for(const id of new Set([...Object.keys(a.dynamicWords),...Object.keys(b.dynamicWords)])){const x=a.dynamicWords[id],y=b.dynamicWords[id];out.dynamicWords[id]=!x?y:!y?x:(Number(x.updatedAt)||0)>=(Number(y.updatedAt)||0)?x:y}
  for(const key of new Set([...Object.keys(a.exampleOverrides),...Object.keys(b.exampleOverrides)])){const x=a.exampleOverrides[key],y=b.exampleOverrides[key];out.exampleOverrides[key]=!x?y:!y?x:(Number(x.updatedAt)||0)>=(Number(y.updatedAt)||0)?x:y}
+ for(const key of new Set([...Object.keys(a.lookupMeanings),...Object.keys(b.lookupMeanings)])){const x=a.lookupMeanings[key],y=b.lookupMeanings[key];out.lookupMeanings[key]=!x?y:!y?x:(Number(x.updatedAt)||0)>=(Number(y.updatedAt)||0)?x:y}
  const sa=a.activeSession,sb=b.activeSession;out.activeSession=(!sa?sb:!sb?sa:(Number(sa.updatedAt)||0)>=(Number(sb.updatedAt)||0)?sa:sb)||null;
  out.autoSpeak=((Number(a.updatedAt)||0)>=(Number(b.updatedAt)||0)?a.autoSpeak:b.autoSpeak)!==false;
  out.voiceURI=(Number(a.updatedAt)||0)>=(Number(b.updatedAt)||0)?a.voiceURI:b.voiceURI;
@@ -512,14 +514,23 @@ function feedbackTermRegex(){
 }
 function feedbackTermMeaning(term=''){
  const key=wordKey(term),bank=getAllWordBank(),direct=bank.find(item=>wordKey(item.word)===key);if(direct)return direct.meaning;
+ const lookedUp=state.wordStudy.lookupMeanings?.[key]?.meaning;if(lookedUp)return lookedUp;
  for(const base of [key.replace(/ies$/,'y'),key.replace(/es$/,''),key.replace(/s$/,''),key.replace(/ied$/,'y'),key.replace(/ed$/,''),key.replace(/ing$/,'')]){const found=bank.find(item=>wordKey(item.word)===base);if(found)return found.meaning}
  const common={too:'너무, 지나치게; 또한',very:'매우',more:'더, 더 많은',most:'가장; 대부분의',nearly:'거의',almost:'거의',already:'이미',still:'여전히',yet:'아직; 그러나',even:'심지어',only:'오직, 단지',also:'또한',about:'~에 관하여; 약',through:'~을 통하여',during:'~동안',before:'~전에',after:'~후에',within:'~이내에',without:'~없이',because:'~이기 때문에',although:'비록 ~이지만',though:'비록 ~이지만',while:'~하는 동안; 반면에',unless:'~하지 않는 한',whether:'~인지 아닌지',each:'각각의',every:'모든',another:'또 하나의',both:'둘 다',either:'둘 중 하나',neither:'둘 다 아닌',such:'그러한',same:'같은',own:'자신의',able:'~할 수 있는',available:'이용 가능한',likely:'~할 가능성이 있는',early:'일찍; 이른',late:'늦게; 늦은',well:'잘',rather:'상당히; 오히려',enough:'충분히; 충분한'};
  return common[key]||''
 }
+function shouldLookupFeedbackTerm(term=''){
+ const key=wordKey(term);return key.length>=3&&!/^(the|and|but|for|from|with|into|onto|that|this|these|those|they|them|their|there|then|than|who|whom|whose|which|what|when|where|why|how|are|was|were|been|being|has|had|have|does|did|will|would|could|should|may|might|must|not|yes|our|your|his|her|its)$/i.test(key)
+}
+async function lookupFeedbackMeaning(term=''){
+ const key=wordKey(term),known=feedbackTermMeaning(key);if(known)return known;if(!shouldLookupFeedbackTerm(key)||!navigator.onLine)return '';
+ if(feedbackMeaningRequests[key])return feedbackMeaningRequests[key];
+ feedbackMeaningRequests[key]=(async()=>{try{const res=await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ko&dt=t&q=${encodeURIComponent(key)}`);if(!res.ok)return '';const data=await res.json(),meaning=(data?.[0]||[]).map(part=>part?.[0]||'').join('').trim();if(!meaning||wordKey(meaning)===key)return '';state.wordStudy.lookupMeanings[key]={meaning,updatedAt:Date.now()};state.wordStudy.updatedAt=Date.now();saveState(false);return meaning}catch(e){console.warn('Feedback vocabulary lookup failed',e);return ''}finally{delete feedbackMeaningRequests[key]}})();return feedbackMeaningRequests[key]
+}
 function interactiveFeedbackEnglish(text,questionId=''){
  if(/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent))return escapeHtml(text);
  const raw=String(text||''),pattern=feedbackTermRegex();let html='',last=0,match;
- while((match=pattern.exec(raw))){const meaning=feedbackTermMeaning(match[0]);html+=escapeHtml(raw.slice(last,match.index));html+=meaning?`<span class="feedback-token" data-vocab-term="${escapeHtml(match[0])}" data-question-id="${escapeHtml(questionId)}" data-meaning="${escapeHtml(meaning)}" title="${escapeHtml(meaning)}">${escapeHtml(match[0])}</span>`:escapeHtml(match[0]);last=pattern.lastIndex}
+ while((match=pattern.exec(raw))){const meaning=feedbackTermMeaning(match[0]),lookup=!meaning&&shouldLookupFeedbackTerm(match[0]);html+=escapeHtml(raw.slice(last,match.index));html+=(meaning||lookup)?`<span class="feedback-token" data-vocab-term="${escapeHtml(match[0])}" data-question-id="${escapeHtml(questionId)}" data-meaning="${escapeHtml(meaning||'뜻 확인 중…')}" data-needs-meaning="${lookup?'1':'0'}" title="${escapeHtml(meaning||'뜻 확인 중…')}">${escapeHtml(match[0])}</span>`:escapeHtml(match[0]);last=pattern.lastIndex}
  return html+escapeHtml(raw.slice(last))
 }
 function interactiveChoiceEnglish(q,index){
@@ -537,7 +548,7 @@ function addManualFeedbackTerm(term,q,source='TOEIC 피드백',meaningHint=''){
  state.wordStudy.dynamicWords[id]={word:clean,meaning,source,example:example.en||String(q?.question||q?.prompt||''),exampleKo:example.ko||'',addedAt:now,updatedAt:now};state.wordStudy.updatedAt=now;saveState();toast(`“${clean}”을 단어 카드 끝에 추가했습니다.`)
 }
 function bindFeedbackVocabulary(container=document){
- container.querySelectorAll('[data-vocab-term]').forEach(token=>token.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();addManualFeedbackTerm(token.dataset.vocabTerm,qById(token.dataset.questionId),'TOEIC 피드백 선택',token.dataset.meaningHint||token.dataset.meaning||'')}))
+ container.querySelectorAll('[data-vocab-term]').forEach(token=>{const resolveMeaning=async()=>{if(token.dataset.needsMeaning!=='1')return token.dataset.meaningHint||token.dataset.meaning||'';const meaning=await lookupFeedbackMeaning(token.dataset.vocabTerm);if(meaning){token.dataset.meaning=meaning;token.dataset.meaningHint=meaning;token.dataset.needsMeaning='0';token.title=meaning}return meaning};token.addEventListener('mouseenter',resolveMeaning);token.addEventListener('click',async event=>{event.preventDefault();event.stopPropagation();const meaning=await resolveMeaning();if(token.dataset.needsMeaning==='1'&&!meaning){toast('단어 뜻을 불러오지 못했습니다. 잠시 후 다시 눌러 주세요.');return}addManualFeedbackTerm(token.dataset.vocabTerm,qById(token.dataset.questionId),'TOEIC 피드백 선택',meaning||token.dataset.meaningHint||token.dataset.meaning||'')})})
 }
 async function syncSentenceForestWrongWords(){
  const code=getSyncCode();if(!isValidSyncCode(code)||!navigator.onLine)return 0;
