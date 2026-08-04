@@ -254,11 +254,11 @@ let session = null;
 let syncTimer=null;
 let syncInFlightPromise=null;
 
-function defaultWordStudy(){return {completedStages:{},wordState:{},dynamicWords:{},exampleOverrides:{},activeSession:null,autoSpeak:true,voiceURI:'',speechRate:.82,updatedAt:0}}
+function defaultWordStudy(){return {completedStages:{},stageCompletionState:{},wordState:{},dynamicWords:{},exampleOverrides:{},activeSession:null,autoSpeak:true,voiceURI:'',speechRate:.82,updatedAt:0}}
 function normalizeWordStudy(raw={}){
  const out={...defaultWordStudy(),...(raw||{})};
- out.completedStages={...(out.completedStages||{})};out.wordState={...(out.wordState||{})};out.dynamicWords={...(out.dynamicWords||{})};out.exampleOverrides={...(out.exampleOverrides||{})};
- if(out.activeSession){out.activeSession={...out.activeSession,ids:Array.isArray(out.activeSession.ids)?out.activeSession.ids:[],wrongIds:Array.isArray(out.activeSession.wrongIds)?out.activeSession.wrongIds:[]}}
+ out.completedStages={...(out.completedStages||{})};out.stageCompletionState={...(out.stageCompletionState||{})};out.wordState={...(out.wordState||{})};out.dynamicWords={...(out.dynamicWords||{})};out.exampleOverrides={...(out.exampleOverrides||{})};
+ if(out.activeSession){const wrongIds=Array.isArray(out.activeSession.wrongIds)?out.activeSession.wrongIds:[];out.activeSession={...out.activeSession,ids:Array.isArray(out.activeSession.ids)?out.activeSession.ids:[],wrongIds,pendingIds:Array.isArray(out.activeSession.pendingIds)?out.activeSession.pendingIds:[...wrongIds]}}
  return out
 }
 function defaultState(){return {mastered:{},wrongEver:{},attempts:0,history:[],questionState:{},attemptsByDevice:{},resetAt:0,updatedAt:0,activeSession:null,profile:null,wordStudy:defaultWordStudy()};}
@@ -291,6 +291,7 @@ function historyKey(h){return h.eventId||JSON.stringify([h.at,h.round,h.ids,h.wr
 function mergeWordStudies(a,b){
  a=normalizeWordStudy(a);b=normalizeWordStudy(b);const out=defaultWordStudy();
  for(const stage of new Set([...Object.keys(a.completedStages),...Object.keys(b.completedStages)]))out.completedStages[stage]=Math.max(Number(a.completedStages[stage])||0,Number(b.completedStages[stage])||0);
+ for(const stage of new Set([...Object.keys(a.stageCompletionState),...Object.keys(b.stageCompletionState)])){const x=a.stageCompletionState[stage],y=b.stageCompletionState[stage];out.stageCompletionState[stage]=!x?y:!y?x:(Number(x.updatedAt)||0)>=(Number(y.updatedAt)||0)?x:y}
  for(const id of new Set([...Object.keys(a.wordState),...Object.keys(b.wordState)])){const x=a.wordState[id],y=b.wordState[id];out.wordState[id]=!x?y:!y?x:(Number(x.updatedAt)||0)>=(Number(y.updatedAt)||0)?x:y}
  for(const id of new Set([...Object.keys(a.dynamicWords),...Object.keys(b.dynamicWords)])){const x=a.dynamicWords[id],y=b.dynamicWords[id];out.dynamicWords[id]=!x?y:!y?x:(Number(x.updatedAt)||0)>=(Number(y.updatedAt)||0)?x:y}
  for(const key of new Set([...Object.keys(a.exampleOverrides),...Object.keys(b.exampleOverrides)])){const x=a.exampleOverrides[key],y=b.exampleOverrides[key];out.exampleOverrides[key]=!x?y:!y?x:(Number(x.updatedAt)||0)>=(Number(y.updatedAt)||0)?x:y}
@@ -579,7 +580,7 @@ function persistWordSession(active){state.wordStudy.activeSession=active?{...act
 function renderWordsHome(){
  stopWordSpeech();
  const root=document.getElementById('wordsAppRoot'),bank=getAllWordBank(),ranges=wordStageRanges(bank.length),completed=state.wordStudy.completedStages||{};
- root.innerHTML=`<div class="words-top"><div class="words-brand"><div class="words-mark">Aa</div><div><h1>누적 단어 카드</h1><p>구간별 학습과 누적 복습을 반복해 모르는 단어를 없앱니다.</p></div></div><button class="portal-link-btn" id="wordsHomeBtn">← 학습 메뉴</button></div>${state.wordStudy.activeSession?.ids?.length?`<button class="portal-btn primary" id="resumeWordsBtn">풀던 단어 학습 이어하기</button>`:''}<div class="words-stage-grid">${ranges.map((range,i)=>{const stage=i+1,count=Math.max(0,Math.min(range.end,bank.length)-range.start),label=range.start===0?`누적 ${Math.min(range.end,bank.length)}개`:`구간 ${count}개`;return `<button class="stage-book ${completed[stage]?'completed':''}" data-word-stage="${stage}"><h3>WORD<br>STAGE ${stage}</h3><strong>${label}</strong><span>No. ${range.start}~${Math.min(range.end,bank.length)}</span></button>`}).join('')}</div>`;
+ root.innerHTML=`<div class="words-top"><div class="words-brand"><div class="words-mark">Aa</div><div><h1>누적 단어 카드</h1><p>구간별 학습과 누적 복습을 반복해 모르는 단어를 없앱니다.</p></div></div><button class="portal-link-btn" id="wordsHomeBtn">← 학습 메뉴</button></div>${state.wordStudy.activeSession?.ids?.length?`<button class="portal-btn primary" id="resumeWordsBtn">풀던 단어 학습 이어하기</button>`:''}<div class="words-stage-grid">${ranges.map((range,i)=>{const stage=i+1,count=Math.max(0,Math.min(range.end,bank.length)-range.start),label=range.start===0?`누적 ${Math.min(range.end,bank.length)}개`:`구간 ${count}개`,record=state.wordStudy.stageCompletionState?.[stage],isCompleted=record?record.completed===true:!!completed[stage];return `<button class="stage-book ${isCompleted?'completed':''}" data-word-stage="${stage}"><h3>WORD<br>STAGE ${stage}</h3><strong>${label}</strong><span>No. ${range.start}~${Math.min(range.end,bank.length)}</span></button>`}).join('')}</div>`;
  document.getElementById('wordsHomeBtn').onclick=showHub;
  if(document.getElementById('resumeWordsBtn'))document.getElementById('resumeWordsBtn').onclick=()=>renderWordStudy(state.wordStudy.activeSession);
  root.querySelectorAll('[data-word-stage]').forEach(btn=>btn.onclick=()=>startWordStage(Number(btn.dataset.wordStage)));
@@ -589,7 +590,7 @@ function startWordStage(stage){
  if(saved?.ids?.length&&Number(saved.stage)===Number(stage)){renderWordStudy(saved);return}
  const bank=getAllWordBank(),range=wordStageRanges(bank.length)[stage-1],ids=range?bank.slice(range.start,Math.min(range.end,bank.length)).map(x=>x.id):[];
  if(!ids.length){toast('학습할 단어가 없습니다.');return}
- const active={stage,ids:shuffle(ids),index:0,wrongIds:[],round:1,revealed:false};persistWordSession(active);renderWordStudy(active)
+ const active={stage,ids:shuffle(ids),index:0,wrongIds:[],pendingIds:[],round:1,revealed:false};persistWordSession(active);renderWordStudy(active)
 }
 function renderWordStudy(active,autoSpeak=true){
  const root=document.getElementById('wordsAppRoot');if(!active?.ids?.length){renderWordsHome();return}
@@ -609,17 +610,19 @@ function renderWordStudy(active,autoSpeak=true){
 }
 function answerWord(active,result){
  const id=active.ids[active.index],now=Date.now();state.wordStudy.wordState[id]={status:result,stage:active.stage,updatedAt:now};
- if(result==='wrong'&&!active.wrongIds.includes(id))active.wrongIds.push(id);
+ active.pendingIds=Array.isArray(active.pendingIds)?active.pendingIds:[];
+ if(result==='wrong'){if(!active.wrongIds.includes(id))active.wrongIds.push(id);if(!active.pendingIds.includes(id))active.pendingIds.push(id);delete state.wordStudy.completedStages[active.stage];state.wordStudy.stageCompletionState[active.stage]={completed:false,updatedAt:now}}
+ else active.pendingIds=active.pendingIds.filter(pendingId=>pendingId!==id);
  active.index++;active.revealed=false;
  persistWordSession(active);
  if(getSyncCode())scheduleCloudSync(0);
  if(active.index>=active.ids.length)finishWordRound(active);else renderWordStudy(active)
 }
 function finishWordRound(active){
- const wrong=[...active.wrongIds],root=document.getElementById('wordsAppRoot');
- if(!wrong.length){if(active.stage)state.wordStudy.completedStages[active.stage]=Date.now();persistWordSession(null);root.innerHTML=`<div class="words-empty"><div class="words-mark" style="margin:0 auto">✓</div><h2>${active.stage?`Stage ${active.stage}`:'오답 유입 단어'} 완료</h2><p>모르는 단어가 모두 없어졌습니다.</p><button class="portal-btn primary" id="wordDoneBtn">스테이지 목록</button></div>`;document.getElementById('wordDoneBtn').onclick=renderWordsHome;return}
- root.insertAdjacentHTML('beforeend',`<div class="words-modal"><div class="words-dialog"><h2>모르는 단어 ${wrong.length}개</h2><p>오답 단어만 다시 반복합니다.<br>순서를 섞어서 시작할까요?</p><div class="words-dialog-actions"><button class="portal-btn primary" id="shuffleWrongBtn">섞어서 반복</button><button class="portal-btn secondary" id="keepWrongBtn">그대로 반복</button></div></div></div>`);
- const repeat=shuffleIt=>{const next={...active,ids:shuffleIt?shuffle(wrong):wrong,index:0,wrongIds:[],round:active.round+1,revealed:false};persistWordSession(next);renderWordStudy(next)};
+ const pending=[...new Set(Array.isArray(active.pendingIds)?active.pendingIds:active.wrongIds||[])],root=document.getElementById('wordsAppRoot');
+ if(!pending.length){if(active.stage){const now=Date.now();state.wordStudy.completedStages[active.stage]=now;state.wordStudy.stageCompletionState[active.stage]={completed:true,updatedAt:now}}persistWordSession(null);root.innerHTML=`<div class="words-empty"><div class="words-mark" style="margin:0 auto">✓</div><h2>${active.stage?`Stage ${active.stage}`:'오답 유입 단어'} 완료</h2><p>모르는 단어가 모두 없어졌습니다.</p><button class="portal-btn primary" id="wordDoneBtn">스테이지 목록</button></div>`;document.getElementById('wordDoneBtn').onclick=renderWordsHome;return}
+ root.insertAdjacentHTML('beforeend',`<div class="words-modal"><div class="words-dialog"><h2>모르는 단어 ${pending.length}개</h2><p>오답 단어만 다시 반복합니다.<br>순서를 섞어서 시작할까요?</p><div class="words-dialog-actions"><button class="portal-btn primary" id="shuffleWrongBtn">섞어서 반복</button><button class="portal-btn secondary" id="keepWrongBtn">그대로 반복</button></div></div></div>`);
+ const repeat=shuffleIt=>{const next={...active,ids:shuffleIt?shuffle(pending):pending,index:0,wrongIds:[],pendingIds:[...pending],round:active.round+1,revealed:false};persistWordSession(next);renderWordStudy(next)};
  document.getElementById('shuffleWrongBtn').onclick=()=>repeat(true);document.getElementById('keepWrongBtn').onclick=()=>repeat(false)
 }
 
