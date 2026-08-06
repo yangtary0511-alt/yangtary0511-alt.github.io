@@ -1,4 +1,4 @@
-const CACHE_NAME = "learning-hub-shell-v38";
+const CACHE_NAME = "learning-hub-shell-v39";
 const CORE_ASSETS = [
   "/",
   "/index.html",

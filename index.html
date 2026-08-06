@@ -580,7 +580,9 @@ function wordStageRanges(total){
  const addSegment=(start,size)=>{if(size<=150){addBlock(start);return}const half=size/2;addSegment(start,half);addSegment(start+half,half);ranges.push({start,end:start+size})};
  addSegment(0,300);
  for(let ceiling=600;ceiling<=2400&&total>ceiling/2;ceiling*=2){addSegment(ceiling/2,ceiling/2);ranges.push({start:0,end:ceiling})}
- return ranges.filter(range=>range.start<total)
+ // 끝단이 30개보다 짧을 때는 그 구간을 한 번만 보여 준다.
+ // 더 큰 누적 범위를 같은 끝 번호로 잘라 표시하면 동일 스테이지가 여러 번 생긴다.
+ return ranges.filter(range=>range.start<total&&(range.end<=total||range.end===range.start+30))
 }
 function speakWordCard(item,example){
  if(!('speechSynthesis' in window)){toast('이 기기에서는 영어 음성 재생을 지원하지 않습니다.');return}
@@ -604,7 +606,7 @@ function persistWordSession(active){state.wordStudy.activeSession=active?{...act
 function renderWordsHome(){
  stopWordSpeech();
  const root=document.getElementById('wordsAppRoot'),bank=getAllWordBank(),ranges=wordStageRanges(bank.length),completed=state.wordStudy.completedStages||{};
- root.innerHTML=`<div class="words-top"><div class="words-brand"><div class="words-mark">Aa</div><div><h1>누적 단어 카드</h1><p>구간별 학습과 누적 복습을 반복해 모르는 단어를 없앱니다.</p></div></div><button class="portal-link-btn" id="wordsHomeBtn">← 학습 메뉴</button></div>${state.wordStudy.activeSession?.ids?.length?`<button class="portal-btn primary" id="resumeWordsBtn">풀던 단어 학습 이어하기</button>`:''}<div class="words-stage-grid">${ranges.map((range,i)=>{const stage=i+1,count=Math.max(0,Math.min(range.end,bank.length)-range.start),label=range.start===0?`누적 ${Math.min(range.end,bank.length)}개`:`구간 ${count}개`,record=state.wordStudy.stageCompletionState?.[stage],isCompleted=record?record.completed===true:!!completed[stage];return `<button class="stage-book ${isCompleted?'completed':''}" data-word-stage="${stage}"><h3>WORD<br>STAGE ${stage}</h3><strong>${label}</strong><span>No. ${range.start}~${Math.min(range.end,bank.length)}</span></button>`}).join('')}</div>`;
+ root.innerHTML=`<div class="words-top"><div class="words-brand"><div class="words-mark">Aa</div><div><h1>누적 단어 카드</h1><p>구간별 학습과 누적 복습을 반복해 모르는 단어를 없앱니다.</p></div></div><button class="portal-link-btn" id="wordsHomeBtn">← 학습 메뉴</button></div>${state.wordStudy.activeSession?.ids?.length?`<button class="portal-btn primary" id="resumeWordsBtn">풀던 단어 학습 이어하기</button>`:''}<div class="words-stage-grid">${ranges.map((range,i)=>{const stage=i+1,stageIds=bank.slice(range.start,Math.min(range.end,bank.length)).map(item=>item.id),count=stageIds.length,label=range.start===0?`누적 ${Math.min(range.end,bank.length)}개`:`구간 ${count}개`,record=state.wordStudy.stageCompletionState?.[stage],hasCompletion=record?record.completed===true:!!completed[stage],allKnown=stageIds.length>0&&stageIds.every(id=>state.wordStudy.wordState?.[id]?.status==='known'),isCompleted=hasCompletion&&allKnown;return `<button class="stage-book ${isCompleted?'completed':''}" data-word-stage="${stage}"><h3>WORD<br>STAGE ${stage}</h3><strong>${label}</strong><span>No. ${range.start}~${Math.min(range.end,bank.length)}</span></button>`}).join('')}</div>`;
  document.getElementById('wordsHomeBtn').onclick=showHub;
  if(document.getElementById('resumeWordsBtn'))document.getElementById('resumeWordsBtn').onclick=()=>renderWordStudy(state.wordStudy.activeSession);
  root.querySelectorAll('[data-word-stage]').forEach(btn=>btn.onclick=()=>startWordStage(Number(btn.dataset.wordStage)));
@@ -614,7 +616,7 @@ function startWordStage(stage){
  if(saved?.ids?.length&&Number(saved.stage)===Number(stage)){renderWordStudy(saved);return}
  const bank=getAllWordBank(),range=wordStageRanges(bank.length)[stage-1],ids=range?bank.slice(range.start,Math.min(range.end,bank.length)).map(x=>x.id):[];
  if(!ids.length){toast('학습할 단어가 없습니다.');return}
- const active={stage,ids:shuffle(ids),index:0,wrongIds:[],pendingIds:[],round:1,revealed:false};persistWordSession(active);renderWordStudy(active)
+ const active={stage,ids:shuffle(ids),stageIds:[...ids],index:0,wrongIds:[],pendingIds:[],round:1,revealed:false};persistWordSession(active);renderWordStudy(active)
 }
 function renderWordStudy(active,autoSpeak=true){
  const root=document.getElementById('wordsAppRoot');if(!active?.ids?.length){renderWordsHome();return}
@@ -643,7 +645,7 @@ function answerWord(active,result){
  if(active.index>=active.ids.length)finishWordRound(active);else renderWordStudy(active)
 }
 function finishWordRound(active){
- const pending=[...new Set(Array.isArray(active.pendingIds)?active.pendingIds:active.wrongIds||[])],root=document.getElementById('wordsAppRoot');
+ const bank=getAllWordBank(),range=active.stage?wordStageRanges(bank.length)[active.stage-1]:null,stageIds=Array.isArray(active.stageIds)&&active.stageIds.length?active.stageIds:(range?bank.slice(range.start,Math.min(range.end,bank.length)).map(item=>item.id):active.ids||[]),stillWrong=stageIds.filter(id=>state.wordStudy.wordState?.[id]?.status!=='known'),pending=[...new Set([...(Array.isArray(active.pendingIds)?active.pendingIds:active.wrongIds||[]),...stillWrong])],root=document.getElementById('wordsAppRoot');
  if(!pending.length){if(active.stage){const now=Date.now();state.wordStudy.completedStages[active.stage]=now;state.wordStudy.stageCompletionState[active.stage]={completed:true,updatedAt:now}}persistWordSession(null);root.innerHTML=`<div class="words-empty"><div class="words-mark" style="margin:0 auto">✓</div><h2>${active.stage?`Stage ${active.stage}`:'오답 유입 단어'} 완료</h2><p>모르는 단어가 모두 없어졌습니다.</p><button class="portal-btn primary" id="wordDoneBtn">스테이지 목록</button></div>`;document.getElementById('wordDoneBtn').onclick=renderWordsHome;return}
  root.insertAdjacentHTML('beforeend',`<div class="words-modal"><div class="words-dialog"><h2>모르는 단어 ${pending.length}개</h2><p>오답 단어만 다시 반복합니다.<br>순서를 섞어서 시작할까요?</p><div class="words-dialog-actions"><button class="portal-btn primary" id="shuffleWrongBtn">섞어서 반복</button><button class="portal-btn secondary" id="keepWrongBtn">그대로 반복</button></div></div></div>`);
  const repeat=shuffleIt=>{const next={...active,ids:shuffleIt?shuffle(pending):pending,index:0,wrongIds:[],pendingIds:[...pending],round:active.round+1,revealed:false};persistWordSession(next);renderWordStudy(next)};
