@@ -221,6 +221,8 @@
 <div class="toast" id="toast"></div>
 <script src="./additional-questions.js"></script>
 <script src="./toeic-update-5.js"></script>
+<script src="./full-passages.js"></script>
+<script src="./full-passages-extra.js"></script>
 <script src="./choice-translations.js"></script>
 <script src="./word-bank.js"></script>
 <script src="./drive-word-examples.js"></script>
@@ -241,6 +243,10 @@ for(const question of QUESTIONS){
   question.passage=full.passage;
   if(full.passageTranslation?.length>(question.passageTranslation||'').length)question.passageTranslation=full.passageTranslation;
  }
+}
+for(const question of QUESTIONS){
+ const fullPassage=window.TOEIC_FULL_PASSAGE_OVERRIDES?.[question.id];
+ if(fullPassage)question.passage=fullPassage;
 }
 const KEY = 'toeic_wrong_elimination_v1';
 const HUB_SYNC_CODE_KEY = 'learning_hub_sync_code_v1';
