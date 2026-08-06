@@ -1,4 +1,4 @@
-const CACHE_NAME = "learning-hub-shell-v37";
+const CACHE_NAME = "learning-hub-shell-v38";
 const CORE_ASSETS = [
   "/",
   "/index.html",
@@ -8,6 +8,7 @@ const CORE_ASSETS = [
   "/learning-hub-icon-v5-256.png",
   "/learning-hub-icon-v5-512.png",
   "/additional-questions.js",
+  "/toeic-update-5.js",
   "/choice-translations.js",
   "/word-bank.js",
   "/drive-word-examples.js",
