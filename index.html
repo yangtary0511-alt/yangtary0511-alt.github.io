@@ -389,11 +389,12 @@ function choiceMeanings(q){
  return `<div class="choice-meanings"><b>모든 선택지 해석</b>${q.choices.map((choice,index)=>`<div class="choice-meaning"><strong>${letters[index]}</strong><div>${interactiveChoiceEnglish(q,index)}<br><span>${escapeHtml(choiceTranslation(q,index))}</span></div></div>`).join('')}</div>`;
 }
 function vocabularyFeedback(q){
- const source=`${q.choices.join(' ')} ${q.explanation||''} ${q.question} ${q.passage||''}`.toLowerCase().replace(/[’']/g,"'");
+ const source=`${q.choices?.[q.answer]||''} ${q.question} ${q.explanation||''} ${q.passage||''}`.toLowerCase().replace(/[’']/g,"'");
  const seen=new Set(),items=[];
  for(const word of source.match(/[a-z][a-z'-]{3,}/g)||[]){
   if(seen.has(word)||/^(choose|best|answer|blank|your|youre|looking|those|these|that|this|with|from|have|will|would|could|should|many|much|more|most|very|only|also|about|into|were|been|being|they|them|their|people|thing|item)$/i.test(word))continue;
-  const meaning=window.TOEIC_WORD_TRANSLATIONS?.[word];
+  const contextual={clarity:'명확성',layout:'배치, 레이아웃',compliments:'칭찬',preferably:'가능하면, 되도록',missing:'누락된, 빠진'};
+  const meaning=contextual[word]||window.TOEIC_WORD_TRANSLATIONS?.[word];
   if(!meaning||meaning.toLowerCase()===word)continue;
   seen.add(word);items.push([word,meaning]);if(items.length===6)break;
  }
@@ -409,34 +410,79 @@ function feedbackAnswerSentence(q,answerIndex=q.answer){
  const source=(marker&&candidates.find(line=>marker.test(line)))||String(q.question||'');
  return String(source).replace(/^\s*\d{1,3}\.\s*/,'').replace(/-{3,}\d*\.?-{0,3}|_{3,}|\[\d+\]/g,answer).replace(/([a-z])-\s+(?=(?:it|to|the|a|an)\b)/gi,'$1 ').replace(/\s+([.,!?])/g,'$1').replace(/([.!?])[-.]+$/,'$1').trim();
 }
+function feedbackBlankContext(q){
+ const raw=String(q.question||''),number=raw.match(/(?:blank\s*|^)(\d{1,3})/i)?.[1]||raw.match(/^(\d{1,3})\./)?.[1]||'',lines=String(q.passage||'').split(/(?<=[.!?])\s+|\n+/).filter(Boolean),marker=number?new RegExp(`-{3,}${number}\\.?-{0,3}|\\[${number}\\]`):null;
+ const source=(marker&&lines.find(line=>marker.test(line)))||raw;
+ return source.replace(/^\s*\d{1,3}\.\s*/,'').replace(/-{3,}\d*\.?-{0,3}|_{3,}|\[\d+\]/,'__BLANK__').trim();
+}
+function choiceForm(choice=''){
+ const value=String(choice).trim().toLowerCase(),words=value.split(/\s+/);
+ if(words.length>1)return '구/문장';if(/ly$/.test(value))return '부사';if(/ing$/.test(value))return '현재분사·동명사';if(/ed$|en$/.test(value))return '과거분사';if(/^(in|on|at|by|for|from|with|about|against|among|between|during|through|without|within|to|of)$/.test(value))return '전치사';if(/^(however|therefore|moreover|nevertheless|nonetheless|likewise|otherwise|instead|meanwhile|henceforth)$/.test(value))return '접속부사';if(/^(and|but|or|so|because|although|though|while|whereas|unless|if|when|once|since)$/.test(value))return '접속사';if(/^(i|me|my|mine|we|us|our|ours|you|your|yours|he|him|his|she|her|hers|it|its|they|them|their|theirs|who|whom|whose|which|that)$/.test(value))return '대명사·관계사';if(/s$/.test(value)&&!/ss$/.test(value))return '복수 명사/3인칭 동사';return '단어';
+}
+function feedbackEvidence(q){
+ const context=feedbackBlankContext(q),before=context.split('__BLANK__')[0]||'',after=context.split('__BLANK__')[1]||'',type=feedbackType(q),forms=q.choices.map(choiceForm),allSame=forms.every(form=>form===forms[0]);
+ const evidence={context,before,after,type,forms,allSame,rule:'',passes:()=>true,decision:'의미와 실제 영어 결합'};
+ const rawNextWord=after.trim().match(/^([A-Za-z][\w'-]*)/)?.[1]||'',nextWord=/^(?:in|on|at|by|for|from|with|about|against|among|between|during|through|without|within|to|of|as|than)$/i.test(rawNextWord)?'':rawNextWord;
+ if(nextWord&&/\b(many|few|several|a number of)\s*$/i.test(before)){evidence.rule=`수량 표현 + 빈칸 + 복수명사 ${nextWord}: 빈칸은 뒤 명사를 꾸미는 말`;evidence.passes=choice=>!/^(?:in|on|at|by|for|from|with|about|to|of)$/i.test(String(choice).trim());evidence.decision='뒤 명사의 상태를 정확히 나타내는 형용사 의미';}
+ else if(nextWord&&/\b(?:has|have|had)\s*$/i.test(before)){evidence.rule=`have/has/had + 빈칸 + ${nextWord}: 완료형 사이에서 동사를 꾸미는 부사 자리`;evidence.passes=choice=>/ly$/i.test(String(choice).trim());evidence.decision='부사 형태와 동작에 맞는 의미';}
+ else if(/\b(many|few|several|a number of)\s*$/i.test(before)){evidence.rule='many/few/several + 복수 가산명사';evidence.passes=choice=>/s$/i.test(String(choice).trim())&&!/ss$/i.test(String(choice).trim());evidence.decision='문법 필터 뒤 동사와 명사의 자연스러운 결합';}
+ else if(/\b(much|little|a great deal of)\s*$/i.test(before)){evidence.rule='much/little + 불가산명사';evidence.decision='명사의 가산성';}
+ else if(/\b(?:can|could|may|might|must|should|will|would)\s*$/i.test(before)){evidence.rule='조동사 + 동사원형';evidence.passes=choice=>!/ing$|ed$|s$/i.test(String(choice).trim());evidence.decision='동사원형 여부와 목적어와의 의미 관계';}
+ else if(/\b(?:has|have|had)\s*$/i.test(before)){evidence.rule='have/has/had + 과거분사';evidence.passes=choice=>/ed$|en$|^(been|done|gone|made|taken|given|seen|known|written|sent|paid|built|found)$/i.test(String(choice).trim());evidence.decision='완료형에 필요한 과거분사';}
+ else if(/\bto\s*$/i.test(before)){evidence.rule='to + 동사원형(또는 고정 전치사 결합)';evidence.decision='앞 단어와 to의 고정 결합 및 뒤 목적어';}
+ else if(/^\s+[A-Za-z][\w'-]*/.test(after)&&type==='품사'&&!/^\s+(?:as|than|to|for|with|in|on|at|by)\b/i.test(after)){evidence.rule=`빈칸 + ${nextWord}: 뒤 단어를 꾸미는 형용사 자리인지 확인`;evidence.passes=choice=>!/ly$/i.test(String(choice).trim());evidence.decision='수식 대상과 품사 형태';}
+ else if(type==='논리 연결'){evidence.rule='앞 문장과 뒤 문장의 실제 논리 관계';evidence.decision='반대·결과·추가·시간 중 맞는 연결 기능';}
+ else if(type==='전치사'){evidence.rule='빈칸 앞 핵심어 + 전치사 + 뒤 명사구';evidence.decision='사전에 함께 외우는 고정 전치사 결합';}
+ else if(type==='동사'){evidence.rule='주어·목적어 관계 → 시제 → 능동/수동';evidence.decision='동사 형태와 목적어 구조';}
+ else if(type==='대명사·관계사'){evidence.rule='선행사 + 관계절에서 비어 있는 문장 성분';evidence.decision='선행사의 종류와 주격·목적격·소유격';}
+ else if(allSame){evidence.rule=`선택지가 모두 ${forms[0]}이므로 형태만으로는 결정 불가`;evidence.decision='문맥에 맞는 뜻과 자연스러운 결합';}
+ else evidence.rule=`빈칸 앞뒤 구조와 선택지 형태(${[...new Set(forms)].join(', ')}) 비교`;
+ return evidence;
+}
+function feedbackChunk(q,index=q.answer){
+ const sentence=feedbackAnswerSentence(q,index),choice=String(q.choices?.[index]||''),words=sentence.split(/\s+/),key=choice.toLowerCase().replace(/[^a-z']/g,''),at=words.findIndex(word=>word.toLowerCase().replace(/[^a-z']/g,'')===key);
+ if(at<0)return choice;let start=Math.max(0,at-2),end=Math.min(words.length,at+3);while(start>0&&/^(the|a|an|many|much|to|be|been|being)$/i.test(words[start]))start--;return words.slice(start,end).join(' ').replace(/[.,!?]+$/,'');
+}
+function feedbackCollocation(q){
+ const answer=String(q.choices?.[q.answer]||''),context=feedbackBlankContext(q),before=context.split('__BLANK__')[0]||'',after=context.split('__BLANK__')[1]||'',explicit=String(q.explanation||'').match(/([A-Za-z]+(?:\s+[A-Za-z]+){0,3}\s+(?:to|on|for|with|in|of|from|at|by)\s*~?)/)?.[1];
+ if(explicit)return explicit.trim();
+ if(/\breceiv(?:e|ed|es|ing)\s+(?:many\s+)?$/i.test(before)&&/^\s+on\b/i.test(after))return `receive ${answer} on ~`;
+ return feedbackChunk(q);
+}
 function grammarClue(q){
- const type=feedbackType(q),sentence=feedbackAnswerSentence(q),answer=String(q.choices?.[q.answer]||''),skill=String(q.skill||'문맥');
- if(type==='전치사')return `빈칸 앞뒤 단어를 따로 번역하지 말고, ‘${answer}’까지 포함한 고정 결합을 확인해야 합니다. 전치사는 함께 쓰이는 동사·형용사·명사가 정답을 결정합니다.`;
- if(type==='논리 연결')return `빈칸 앞 문장과 뒤 문장의 관계가 핵심입니다. 반대·결과·추가·시간 순서 중 어느 관계인지 먼저 정한 뒤 ${answer}의 기능과 맞춰야 합니다.`;
- if(type==='동사')return `주어와 목적어의 관계, 문장의 시간, 능동·수동 여부를 차례로 확인합니다. 이 문장에서는 ‘${answer}’의 형태가 그 구조를 완성합니다.`;
- if(type==='품사')return `빈칸이 문장에서 꾸미는 말과 자리를 먼저 봅니다. ‘${skill}’ 조건에 맞는 형태가 필요하며, 정답 ${answer}은 그 자리에 문법적으로 들어갈 수 있습니다.`;
- if(type==='대명사·관계사')return `빈칸이 가리키는 선행사와 빈칸 뒤 문장의 빠진 성분을 확인해야 합니다. 의미보다 문장 성분을 먼저 따지면 보기를 빠르게 줄일 수 있습니다.`;
- if(type==='수량 표현')return `빈칸 주변 명사가 셀 수 있는지, 단수인지 복수인지가 단서입니다. 수량 표현 뒤에 요구되는 명사 형태까지 한 묶음으로 확인합니다.`;
- return `완성 문장 ‘${sentence}’의 앞뒤 의미가 자연스럽게 이어지는지 확인합니다. 이 문제는 ${skill}이므로 사전 뜻 하나보다 실제 문장 안의 결합이 중요합니다.`;
+ const e=feedbackEvidence(q),passes=q.choices.map(choice=>e.passes(choice)),allPass=passes.every(Boolean);
+ return `${e.rule}. ${allPass?'이 문제의 선택지는 모두 이 형태 조건을 통과하므로 여기서 정답이 결정되지 않습니다. ':''}최종 판단은 ${e.decision}을 확인해야 합니다.`;
 }
 function wrongChoiceReason(q,index){
- const choice=String(q.choices?.[index]||''),meaning=choiceTranslation(q,index),type=feedbackType(q),odd=feedbackAnswerSentence(q,index);
- if(type==='논리 연결')return `‘${choice}’(${meaning})를 쓰면 앞뒤 문장의 논리 관계가 달라집니다. 실제로는 “${odd}”가 되어 지문의 흐름과 맞지 않습니다.`;
- if(type==='전치사')return `‘${choice}’(${meaning})를 넣은 “${odd}”는 이 문맥에서 자연스러운 고정 결합을 만들지 못합니다.`;
- if(type==='품사'||type==='동사'||type==='대명사·관계사'||type==='수량 표현')return `‘${choice}’(${meaning})를 넣으면 “${odd}”가 됩니다. 뜻뿐 아니라 이 빈칸이 요구하는 ${q.skill} 형태·문장 성분을 충족하지 못합니다.`;
- return `‘${choice}’는 ${meaning}라는 뜻이지만, 넣어 보면 “${odd}”가 되어 정답 문장에 필요한 의미나 자연스러운 단어 결합이 만들어지지 않습니다.`;
+ const choice=String(q.choices?.[index]||''),meaning=choiceTranslation(q,index),e=feedbackEvidence(q),odd=feedbackAnswerSentence(q,index),passes=e.passes(choice),correctChunk=feedbackCollocation(q);
+ if(!passes)return `${choice}(${meaning})는 ${e.rule}에 필요한 형태가 아닙니다. 실제 문장 “${odd}”에서는 빈칸의 문장 성분이 맞지 않습니다.`;
+ if(/^(?:what|why|where|when|who|which|how)\b/i.test(String(q.question||'').replace(/^\s*\d+\.\s*/,''))||choice.split(/\s+/).length>5)return `${choice}(${meaning})는 문장 자체는 성립하지만, 지문에 적힌 사실이나 질문의 초점과 일치하지 않습니다. 정답 근거인 “${q.explanation||feedbackAnswerSentence(q)}”와 비교하면 이 선택지가 말하는 내용은 지문에서 뒷받침되지 않습니다.`;
+ if(e.type==='논리 연결')return `${choice}(${meaning})를 넣으면 “${odd}”가 됩니다. 이 연결어가 만드는 논리 관계가 지문에 설명된 실제 관계와 달라서 오답입니다.`;
+ if(e.type==='전치사')return `${choice}(${meaning}) 자체의 뜻이 문제가 아니라, “${odd}”에서 빈칸 앞 핵심어와 고정 결합을 만들지 못합니다. 정답 표현은 ${correctChunk}입니다.`;
+ return `${choice}(${meaning})는 ${e.rule}이라는 형태 조건은 통과합니다. 그러나 “${odd}”로 읽으면 문장의 주어·동사·목적어 사이 의미 관계가 어색하고, 이 문맥에서 쓰는 자연스러운 결합 ${correctChunk}를 만들지 못합니다.`;
+}
+function correctChoiceReason(q){
+ const choice=String(q.choices?.[q.answer]||''),meaning=choiceTranslation(q,q.answer),chunk=feedbackCollocation(q),explanation=String(q.explanation||'').trim();
+ if(/^(?:what|why|where|when|who|which|how)\b/i.test(String(q.question||'').replace(/^\s*\d+\.\s*/,''))||choice.split(/\s+/).length>5)return `${choice}(${meaning})가 지문의 구체적인 내용과 일치합니다. ${explanation||'질문이 요구한 정보가 지문에서 직접 확인됩니다.'}`;
+ return `${chunk}는 이 문장에서 자연스러운 영어 결합입니다. ${choice}의 문맥상 뜻은 ‘${meaning}’입니다.${explanation?` ${explanation}`:''}`;
 }
 function collocationFeedback(q){
- const explanation=String(q.explanation||''),answer=String(q.choices?.[q.answer]||''),sentence=feedbackAnswerSentence(q),found=[];
- for(const match of explanation.matchAll(/([A-Za-z][A-Za-z' -]{1,35}(?:\s(?:to|on|for|with|in|of|from|at|by)\s~?|\s*=\s*)[^,.。]{0,28})/g)){const value=match[1].trim();if(value.length>3&&!found.includes(value))found.push(value);if(found.length===3)break}
- if(!found.length){const words=sentence.split(/\s+/),at=words.findIndex(word=>word.toLowerCase().replace(/[^a-z']/g,'')===answer.toLowerCase().replace(/[^a-z']/g,''));if(at>=0)found.push(words.slice(Math.max(0,at-2),Math.min(words.length,at+3)).join(' ').replace(/[.,!?]+$/,''))}
- return found.length?`<div class="feedback-section"><b>⑦ 같이 외울 표현</b>${found.map(item=>`<p>★ ${escapeHtml(item)}</p>`).join('')}</div>`:'';
+ const chunk=feedbackCollocation(q),answer=String(q.choices?.[q.answer]||''),meaning=choiceTranslation(q,q.answer),items=[`${chunk} = ${meaning}`];
+ if(/^receive compliments on/i.test(chunk))items.push('compliment A on B = B에 대해 A를 칭찬하다','receive praise / receive feedback = 칭찬·피드백을 받다','clear → clarity = 명확한 → 명확성');
+ return `<div class="feedback-section"><b>⑦ 같이 외울 표현</b>${items.map(item=>`<p>★ ${escapeHtml(item)}</p>`).join('')}</div>`;
+}
+function feedbackStrategy(q){
+ const e=feedbackEvidence(q),allPass=q.choices.every(choice=>e.passes(choice));
+ if(allPass&&/복수 가산명사/.test(e.rule))return `1) 수량 표현 뒤 복수 가산명사를 확인합니다. 2) 선택지가 모두 통과하면 품사에서 멈추지 않습니다. 3) 빈칸 앞 동사와 뒤 전치사까지 묶어 ${feedbackCollocation(q)}를 찾습니다.`;
+ if(e.type==='논리 연결')return '보기부터 읽지 말고 앞뒤 문장을 각각 한 줄로 요약한 뒤, 관계를 반대·결과·추가·시간으로 이름 붙여 맞는 연결어를 고릅니다.';
+ if(e.type==='전치사')return `빈칸 앞 핵심어부터 뒤 명사까지 한 덩어리로 읽고, ${feedbackCollocation(q)}처럼 실제로 쓰는 결합을 고릅니다.`;
+ if(e.type==='동사')return '주어와 목적어를 먼저 찾고, 시간 표현으로 시제를 정한 뒤, 주어가 행동하는지 받는지 확인해 능동·수동을 고릅니다.';
+ return `${e.rule}을 먼저 확인해 보기를 줄이고, 남은 보기들은 완성 문장에 넣어 뜻과 결합을 비교합니다.`;
 }
 function detailedFeedback(q,chosen,includeChoices=true){
- const isCorrect=chosen===q.answer,answerSentence=feedbackAnswerSentence(q),translation=String(q.sentenceTranslation||window.TOEIC_SENTENCE_TRANSLATIONS?.[q.question]||''),correct=String(q.choices[q.answer]||''),type=feedbackType(q);
- const optionRows=q.choices.map((choice,index)=>{const cls=index===q.answer?'option-correct':index===chosen?'option-picked':'';const reason=index===q.answer?`${choiceTranslation(q,index)} — ${q.explanation||`문장의 ${q.skill} 조건과 의미를 자연스럽게 완성합니다.`}`:wrongChoiceReason(q,index);return `<div class="${cls}"><strong>${letters[index]}. ${escapeHtml(choice)}</strong> · ${escapeHtml(reason)}</div>`}).join('');
- const memory=type==='논리 연결'?'연결어를 보기 전에 앞뒤 문장의 관계부터 ‘반대/결과/추가/순서’로 이름 붙이세요.':type==='전치사'?'전치사는 단독 뜻보다 앞 단어와 함께 쓰이는 고정 표현으로 외우세요.':type==='품사'?'뜻을 보기 전에 빈칸 자리가 요구하는 품사를 먼저 확정하세요.':type==='동사'?'주어·목적어 → 시제 → 능동/수동 순서로 확인하세요.':`보기를 하나씩 넣어 실제 완성 문장의 뜻과 자연스러운 결합을 확인하세요.`;
- return `<div class="teacher-feedback"><div class="feedback-section"><b>① 정답 문장과 해석</b><p class="answer-en">${interactiveFeedbackEnglish(answerSentence,q.id)}</p>${translation?`<p class="answer-ko">→ ${escapeHtml(translation)}</p>`:''}</div><div class="feedback-section core-point"><b>② 왜 ${letters[q.answer]}. ${escapeHtml(correct)}가 정답인가</b><p>${escapeHtml(q.explanation||`정답을 넣으면 문장의 ${q.skill} 조건을 만족하고 앞뒤 의미가 자연스럽게 이어집니다.`)}</p></div><div class="feedback-section"><b>③ 문제에서 잡아야 할 구조 단서</b><p>${escapeHtml(grammarClue(q))}</p></div>${!isCorrect?`<div class="feedback-section user-wrong"><b>④ 내가 고른 ${letters[chosen]}. ${escapeHtml(q.choices[chosen])}가 틀린 이유</b><p>${escapeHtml(wrongChoiceReason(q,chosen))}</p></div>`:''}<div class="feedback-section"><b>${isCorrect?'④':'⑤'} 선택지별 분석</b><div class="option-analysis">${optionRows}</div></div>${collocationFeedback(q)}${vocabularyFeedback(q)}<div class="feedback-section"><b>⑧ 다음에 푸는 법</b><p class="memory-line">${escapeHtml(memory)}</p></div></div>`;
+ const isCorrect=chosen===q.answer,answerSentence=feedbackAnswerSentence(q),translation=String(q.sentenceTranslation||window.TOEIC_SENTENCE_TRANSLATIONS?.[q.question]||''),correct=String(q.choices[q.answer]||'');
+ const optionRows=q.choices.map((choice,index)=>{const cls=index===q.answer?'option-correct':index===chosen?'option-picked':'';const reason=index===q.answer?correctChoiceReason(q):wrongChoiceReason(q,index);return `<div class="${cls}"><strong>${letters[index]}. ${escapeHtml(choice)}</strong> · ${escapeHtml(reason)}</div>`}).join('');
+ return `<div class="teacher-feedback"><div class="feedback-section"><b>① 정답 문장과 해석</b><p class="answer-en">${interactiveFeedbackEnglish(answerSentence,q.id)}</p>${translation?`<p class="answer-ko">→ ${escapeHtml(translation)}</p>`:''}</div><div class="feedback-section core-point"><b>② 핵심 표현과 정답 근거</b><p>${escapeHtml(correctChoiceReason(q))}</p></div><div class="feedback-section"><b>③ 문제에서 잡아야 할 실제 구조 단서</b><p>${escapeHtml(grammarClue(q))}</p></div>${!isCorrect?`<div class="feedback-section user-wrong"><b>④ 내가 고른 ${letters[chosen]}. ${escapeHtml(q.choices[chosen])}가 틀린 이유</b><p>${escapeHtml(wrongChoiceReason(q,chosen))}</p></div>`:''}<div class="feedback-section"><b>${isCorrect?'④':'⑤'} 선택지별 실제 분석</b><div class="option-analysis">${optionRows}</div></div>${collocationFeedback(q)}${vocabularyFeedback(q)}<div class="feedback-section"><b>⑧ 다음에 푸는 법</b><p class="memory-line">${escapeHtml(feedbackStrategy(q))}</p></div></div>`;
 }
 
 function wordKey(word=''){return String(word).trim().toLowerCase().replace(/[’]/g,"'")}
