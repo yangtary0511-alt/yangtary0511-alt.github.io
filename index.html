@@ -249,6 +249,8 @@ for(const question of QUESTIONS){
 for(const question of QUESTIONS){
  const fullPassage=window.TOEIC_FULL_PASSAGE_OVERRIDES?.[question.id];
  if(fullPassage)question.passage=fullPassage;
+ const fullTranslation=window.TOEIC_FULL_PASSAGE_TRANSLATION_OVERRIDES?.[question.id];
+ if(fullTranslation)question.passageTranslation=fullTranslation;
 }
 const KEY = 'toeic_wrong_elimination_v1';
 const HUB_SYNC_CODE_KEY = 'learning_hub_sync_code_v1';
@@ -377,9 +379,14 @@ function sentenceTranslationBlock(q){
  return `<div class="translation-box inline-translation sentence-ko"><b>${label}</b>${escapeHtml(sentenceKo)}</div>`;
 }
 function passageTranslationBlock(q){
- const passageKo=q.passageTranslation||window.TOEIC_PASSAGE_TRANSLATIONS?.[q.passage];
+ const passageKo=resolvedPassageTranslation(q);
  if(!q.passage||!passageKo)return '';
  return `<div class="translation-box passage-ko inline-translation"><b>지문 해석</b>${escapeHtml(passageKo)}</div>`;
+}
+function resolvedPassageTranslation(q){
+ const direct=q.passageTranslation||window.TOEIC_PASSAGE_TRANSLATIONS?.[q.passage]||'';if(!q.passage)return direct;
+ const lines=String(q.passage).split(/(?<=[.!?])\s+|\n+/).map(v=>v.trim()).filter(Boolean),maps=[window.DRIVE_EXAMPLE_TRANSLATIONS||{},window.APP_EXAMPLE_TRANSLATIONS||{},window.TOEIC_SENTENCE_TRANSLATIONS||{}],translated=lines.map(line=>maps.map(map=>map[line]).find(Boolean)||'').filter(Boolean).join('\n');
+ return translated.length>String(direct).length?translated:direct;
 }
 function choiceTranslation(q,index){
  const direct=Array.isArray(q.choiceTranslations)?q.choiceTranslations[index]:'';
@@ -402,7 +409,7 @@ function vocabularyFeedback(q){
 }
 function feedbackType(q){
  const skill=String(q.skill||'').toLowerCase();
- if(/전치사/.test(skill))return '전치사';if(/접속|문장 삽입/.test(skill))return '논리 연결';if(/대명사|관계/.test(skill))return '대명사·관계사';if(/수량|수 일치/.test(skill))return '수량 표현';if(/시제|태|동사|분사/.test(skill))return '동사';if(/품사|형용사|부사|명사/.test(skill))return '품사';if(/어휘|숙어|콜로케이션/.test(skill))return '어휘';return '문맥';
+ if(/문장 삽입/.test(skill))return '문장 삽입';if(/전치사/.test(skill))return '전치사';if(/접속/.test(skill))return '논리 연결';if(/대명사|관계/.test(skill))return '대명사·관계사';if(/수량|수 일치/.test(skill))return '수량 표현';if(/시제|태|동사|분사/.test(skill))return '동사';if(/품사|형용사|부사|명사/.test(skill))return '품사';if(/어휘|숙어|콜로케이션/.test(skill))return '어휘';return '문맥';
 }
 function feedbackAnswerSentence(q,answerIndex=q.answer){
  const answer=String(q.choices?.[answerIndex]||'').trim(),number=String(q.question||'').match(/(?:blank\s*|^)(\d{1,3})/i)?.[1]||String(q.question||'').match(/^(\d{1,3})\./)?.[1]||'';
@@ -414,6 +421,38 @@ function feedbackBlankContext(q){
  const raw=String(q.question||''),number=raw.match(/(?:blank\s*|^)(\d{1,3})/i)?.[1]||raw.match(/^(\d{1,3})\./)?.[1]||'',lines=String(q.passage||'').split(/(?<=[.!?])\s+|\n+/).filter(Boolean),marker=number?new RegExp(`-{3,}${number}\\.?-{0,3}|\\[${number}\\]`):null;
  const source=(marker&&lines.find(line=>marker.test(line)))||raw;
  return source.replace(/^\s*\d{1,3}\.\s*/,'').replace(/-{3,}\d*\.?-{0,3}|_{3,}|\[\d+\]/,'__BLANK__').trim();
+}
+function insertionContext(q){
+ const passage=String(q.passage||''),number=String(q.question||'').match(/(?:blank\s*|^)(\d{1,3})/i)?.[1]||String(q.question||'').match(/^(\d{1,3})\./)?.[1]||'',marker=number?new RegExp(`-{3,}${number}\\.?-{0,3}|\\[${number}\\]`):/-{3,}\d+\.?-{0,3}|\[\d+\]|_{3,}/,match=passage.match(marker),index=match?.index??-1;
+ if(index<0)return {passage,number,before:'',after:'',marker:''};
+ const left=passage.slice(0,index).trim(),right=passage.slice(index+(match?.[0]?.length||0)).replace(/^\s*[.\-]+\s*/,'').trim(),sentences=text=>text.split(/(?<=[.!?])\s+|\n+/).map(v=>v.trim()).filter(v=>/[A-Za-z]/.test(v));
+ const beforeParts=sentences(left),afterParts=sentences(right);return {passage,number,before:beforeParts.at(-1)||'',after:afterParts[0]||'',marker:match?.[0]||''};
+}
+function shortQuote(text='',limit=150){const value=String(text).replace(/\s+/g,' ').trim();return value.length>limit?`${value.slice(0,limit).replace(/\s+\S*$/,'')}…`:value}
+function insertionRole(q){
+ const c=insertionContext(q),before=c.before.toLowerCase(),after=c.after.toLowerCase();
+ if(/malfunction|problem|issue|difficulty|complaint/.test(before))return '앞에서 제시한 문제나 오류를 구체적인 증상·사례로 설명';
+ if(/interview|schedule|date|time/.test(after))return '앞의 제안과 뒤의 일정 안내를 이어 주는 요청 또는 안내';
+ if(/solution|consider|therefore|request|ask/.test(after))return '앞의 상황을 구체화한 뒤 해결 요청으로 넘겨주는 근거';
+ return '앞 문장의 핵심 내용을 이어받아 뒤 문장이 갑자기 끊기지 않게 연결';
+}
+function insertionChoiceReason(q,index){
+ const c=insertionContext(q),choice=String(q.choices?.[index]||''),lower=choice.toLowerCase(),passage=c.passage.toLowerCase(),isCorrect=index===q.answer;
+ if(isCorrect){
+  if(/malfunction/.test(c.before.toLowerCase())&&/disappear/.test(lower))return `앞 문장의 malfunction(오작동)을 ‘선택한 상품이 사라짐’이라는 관찰 가능한 증상으로 풀어 줍니다. 이어지는 해결책 검토 요청도 이 구체적 오류를 자연스럽게 가리킵니다.`;
+  return `이 문장은 ${insertionRole(q)}하는 역할을 합니다. 앞의 “${shortQuote(c.before,105)}”를 받아 뒤의 “${shortQuote(c.after,105)}”로 내용이 끊기지 않고 이어집니다.`;
+ }
+ if(/newly added|already (?:been )?added/.test(c.before.toLowerCase())&&/will be added|be added after/.test(lower))return `앞 문장은 해당 기능이 newly added, 즉 이미 추가되었다고 말합니다. 그런데 이 보기는 will be added(앞으로 추가될 것)라고 하므로 기능의 추가 시점이 정면으로 모순됩니다.`;
+ if(/first (?:user )?survey/.test(passage)&&/recent years|over the years|for years/.test(lower))return `지문은 first user survey(첫 설문)의 현재 결과를 요약합니다. 이 보기는 recent years(최근 몇 년)로 기간을 넓혀 지문에 없는 과거 누적 정보를 만들기 때문에 시간 범위가 맞지 않습니다.`;
+ if(/consider solutions|solutions for these issues/.test(c.after.toLowerCase())&&/already (?:fixing|repairing)|have (?:fixed|repaired)/.test(lower))return `뒤 문장은 아직 해결책을 검토해 달라고 요청합니다. 이 보기는 기술자들이 already fixing(이미 수리 중)이라고 하여 해결 방향이 정해진 것처럼 만들므로 뒤의 요청과 단계가 충돌합니다.`;
+ if(/interview/.test(c.after.toLowerCase())&&!/interview|opening|position|candidate|applicant/.test(lower))return `다음 문장이 바로 면접 일정으로 넘어가는데, 이 보기는 면접·직책과 무관한 새 주제를 꺼내므로 담화의 초점이 끊깁니다.`;
+ if(/\b(it|they|them|this|these|those)\b/.test(lower)){const pronoun=lower.match(/\b(it|they|them|this|these|those)\b/)?.[1];return `${pronoun}이 가리킬 대상이 앞 문장에서 분명해야 하지만, 이 보기의 지칭 관계는 앞의 “${shortQuote(c.before,100)}”와 정확히 연결되지 않습니다. 뒤 문장의 주제와도 이어지지 않습니다.`}
+ return `이 보기는 “${shortQuote(choice,115)}”라는 새 정보를 제시하지만, 앞 문장의 핵심 “${shortQuote(c.before,90)}”를 설명하거나 이어받지 못합니다. 또한 뒤의 “${shortQuote(c.after,90)}”로 넘어갈 근거도 만들지 못합니다.`;
+}
+function insertionFeedback(q,chosen){
+ const c=insertionContext(q),answer=String(q.choices?.[q.answer]||''),translation=String(q.sentenceTranslation||choiceTranslation(q,q.answer)||''),rows=q.choices.map((choice,index)=>`<div class="${index===q.answer?'option-correct':index===chosen?'option-picked':''}"><strong>${letters[index]}. ${index===q.answer?'정답 문장':escapeHtml(choice)}</strong><br>${escapeHtml(insertionChoiceReason(q,index))}</div>`).join(''),phrases=[];
+ if(/malfunction/i.test(c.before))phrases.push('appear to have a malfunction = 오작동이 있는 것으로 보이다');if(/disappear/i.test(answer))phrases.push('disappear after being selected = 선택된 뒤 사라지다');if(/consider solutions/i.test(c.after))phrases.push('consider solutions for ~ = ~의 해결책을 검토하다');if(!phrases.length)phrases.push('앞 문장 핵심어 → 빈칸의 역할 → 뒤 문장의 지칭·논리 순서로 확인');
+ return `<div class="teacher-feedback"><div class="feedback-section"><b>정답 문장과 해석</b><p class="answer-en">${interactiveFeedbackEnglish(answer,q.id)}</p>${translation?`<p class="answer-ko">→ ${escapeHtml(translation)}</p>`:''}</div><div class="feedback-section core-point"><b>앞·빈칸·뒤의 연결</b><p><strong>앞:</strong> ${escapeHtml(shortQuote(c.before))}</p><p><strong>빈칸 역할:</strong> ${escapeHtml(insertionRole(q))}</p><p><strong>뒤:</strong> ${escapeHtml(shortQuote(c.after))}</p><p><strong>연결 흐름:</strong> ${escapeHtml(insertionChoiceReason(q,q.answer))}</p></div>${chosen!==q.answer?`<div class="feedback-section user-wrong"><b>내 선택이 틀린 결정적 이유</b><p>${escapeHtml(insertionChoiceReason(q,chosen))}</p></div>`:''}<div class="feedback-section"><b>선택지별 문맥 검증</b><div class="option-analysis">${rows}</div></div><div class="feedback-section"><b>같이 볼 표현</b>${phrases.map(p=>`<p>★ ${escapeHtml(p)}</p>`).join('')}</div><div class="feedback-section"><b>다음에 푸는 법</b><p class="memory-line">문장 삽입은 문법 보기 문제가 아닙니다. ① 앞 문장 주제 ② 빈칸이 맡을 역할 ③ 뒤 문장의 대명사·요청·시간을 확인하고, 세 부분을 모두 잇는 보기만 남기세요.</p></div></div>`;
 }
 function choiceForm(choice=''){
  const value=String(choice).trim().toLowerCase(),words=value.split(/\s+/);
@@ -456,7 +495,7 @@ function grammarClue(q){
 function wrongChoiceReason(q,index){
  const choice=String(q.choices?.[index]||''),meaning=choiceTranslation(q,index),e=feedbackEvidence(q),odd=feedbackAnswerSentence(q,index),passes=e.passes(choice),correctChunk=feedbackCollocation(q);
  if(!passes)return `${choice}(${meaning})는 ${e.rule}에 필요한 형태가 아닙니다. 실제 문장 “${odd}”에서는 빈칸의 문장 성분이 맞지 않습니다.`;
- if(/^(?:what|why|where|when|who|which|how)\b/i.test(String(q.question||'').replace(/^\s*\d+\.\s*/,''))||choice.split(/\s+/).length>5)return `${choice}(${meaning})는 문장 자체는 성립하지만, 지문에 적힌 사실이나 질문의 초점과 일치하지 않습니다. 정답 근거인 “${q.explanation||feedbackAnswerSentence(q)}”와 비교하면 이 선택지가 말하는 내용은 지문에서 뒷받침되지 않습니다.`;
+ if(/^(?:what|why|where|when|who|which|how)\b/i.test(String(q.question||'').replace(/^\s*\d+\.\s*/,''))||choice.split(/\s+/).length>5)return `${choice}(${meaning})가 주장하는 내용은 지문의 근거와 다릅니다. 이 문제의 실제 근거는 “${q.explanation||feedbackAnswerSentence(q)}”이며, 보기의 핵심 명사·동작이 그 근거의 바꿔 말하기가 아닙니다.`;
  if(e.type==='논리 연결')return `${choice}(${meaning})를 넣으면 “${odd}”가 됩니다. 이 연결어가 만드는 논리 관계가 지문에 설명된 실제 관계와 달라서 오답입니다.`;
  if(e.type==='전치사')return `${choice}(${meaning}) 자체의 뜻이 문제가 아니라, “${odd}”에서 빈칸 앞 핵심어와 고정 결합을 만들지 못합니다. 정답 표현은 ${correctChunk}입니다.`;
  return `${choice}(${meaning})는 ${e.rule}이라는 형태 조건은 통과합니다. 그러나 “${odd}”로 읽으면 문장의 주어·동사·목적어 사이 의미 관계가 어색하고, 이 문맥에서 쓰는 자연스러운 결합 ${correctChunk}를 만들지 못합니다.`;
@@ -469,7 +508,7 @@ function correctChoiceReason(q){
 function collocationFeedback(q){
  const chunk=feedbackCollocation(q),answer=String(q.choices?.[q.answer]||''),meaning=choiceTranslation(q,q.answer),items=[`${chunk} = ${meaning}`];
  if(/^receive compliments on/i.test(chunk))items.push('compliment A on B = B에 대해 A를 칭찬하다','receive praise / receive feedback = 칭찬·피드백을 받다','clear → clarity = 명확한 → 명확성');
- return `<div class="feedback-section"><b>⑦ 같이 외울 표현</b>${items.map(item=>`<p>★ ${escapeHtml(item)}</p>`).join('')}</div>`;
+ return `<div class="feedback-section"><b>같이 외울 표현</b>${items.map(item=>`<p>★ ${escapeHtml(item)}</p>`).join('')}</div>`;
 }
 function feedbackStrategy(q){
  const e=feedbackEvidence(q),allPass=q.choices.every(choice=>e.passes(choice));
@@ -480,9 +519,10 @@ function feedbackStrategy(q){
  return `${e.rule}을 먼저 확인해 보기를 줄이고, 남은 보기들은 완성 문장에 넣어 뜻과 결합을 비교합니다.`;
 }
 function detailedFeedback(q,chosen,includeChoices=true){
+ if(feedbackType(q)==='문장 삽입')return insertionFeedback(q,chosen);
  const isCorrect=chosen===q.answer,answerSentence=feedbackAnswerSentence(q),translation=String(q.sentenceTranslation||window.TOEIC_SENTENCE_TRANSLATIONS?.[q.question]||''),correct=String(q.choices[q.answer]||'');
  const optionRows=q.choices.map((choice,index)=>{const cls=index===q.answer?'option-correct':index===chosen?'option-picked':'';const reason=index===q.answer?correctChoiceReason(q):wrongChoiceReason(q,index);return `<div class="${cls}"><strong>${letters[index]}. ${escapeHtml(choice)}</strong> · ${escapeHtml(reason)}</div>`}).join('');
- return `<div class="teacher-feedback"><div class="feedback-section"><b>① 정답 문장과 해석</b><p class="answer-en">${interactiveFeedbackEnglish(answerSentence,q.id)}</p>${translation?`<p class="answer-ko">→ ${escapeHtml(translation)}</p>`:''}</div><div class="feedback-section core-point"><b>② 핵심 표현과 정답 근거</b><p>${escapeHtml(correctChoiceReason(q))}</p></div><div class="feedback-section"><b>③ 문제에서 잡아야 할 실제 구조 단서</b><p>${escapeHtml(grammarClue(q))}</p></div>${!isCorrect?`<div class="feedback-section user-wrong"><b>④ 내가 고른 ${letters[chosen]}. ${escapeHtml(q.choices[chosen])}가 틀린 이유</b><p>${escapeHtml(wrongChoiceReason(q,chosen))}</p></div>`:''}<div class="feedback-section"><b>${isCorrect?'④':'⑤'} 선택지별 실제 분석</b><div class="option-analysis">${optionRows}</div></div>${collocationFeedback(q)}${vocabularyFeedback(q)}<div class="feedback-section"><b>⑧ 다음에 푸는 법</b><p class="memory-line">${escapeHtml(feedbackStrategy(q))}</p></div></div>`;
+ return `<div class="teacher-feedback"><div class="feedback-section"><b>정답 문장과 해석</b><p class="answer-en">${interactiveFeedbackEnglish(answerSentence,q.id)}</p>${translation?`<p class="answer-ko">→ ${escapeHtml(translation)}</p>`:''}</div><div class="feedback-section core-point"><b>핵심 표현과 정답 근거</b><p>${escapeHtml(correctChoiceReason(q))}</p></div><div class="feedback-section"><b>문제에서 잡아야 할 실제 구조 단서</b><p>${escapeHtml(grammarClue(q))}</p></div>${!isCorrect?`<div class="feedback-section user-wrong"><b>내가 고른 ${letters[chosen]}. ${escapeHtml(q.choices[chosen])}가 틀린 이유</b><p>${escapeHtml(wrongChoiceReason(q,chosen))}</p></div>`:''}<div class="feedback-section"><b>선택지별 실제 분석</b><div class="option-analysis">${optionRows}</div></div>${collocationFeedback(q)}${vocabularyFeedback(q)}<div class="feedback-section"><b>다음에 푸는 법</b><p class="memory-line">${escapeHtml(feedbackStrategy(q))}</p></div></div>`;
 }
 
 function wordKey(word=''){return String(word).trim().toLowerCase().replace(/[’]/g,"'")}
